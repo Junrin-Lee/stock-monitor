@@ -365,5 +365,15 @@
   "watchlist.noTags": "暂无可用标签",
   "group.marketTags": "市场分组",
   "group.userTags": "自定义标签",
-  "group.helpText": "操作: ↑/↓选择, Enter确认, C清除过滤, ESC/Q返回"
+  "group.helpText": "操作: ↑/↓选择, Enter确认, C清除过滤, ESC/Q返回",
+
+  "log.holiday.workerStart": "节假日数据同步 worker 启动",
+  "log.holiday.fetchSuccess": "成功获取 %d 年节假日数据",
+  "log.holiday.noDataForYear": "API 中无 %d 年数据",
+  "log.holiday.createFile": "创建新的日历文件: %s",
+  "log.holiday.updateFile": "更新日历文件: %s (变更: %d 处)",
+  "log.holiday.noChange": "日历数据无变化，仅更新时间戳",
+  "log.holiday.complete": "节假日数据同步完成，耗时 %v",
+  "log.holiday.fetchFailed": "获取节假日数据失败: %s",
+  "log.holiday.allRetryFailed": "节假日数据同步失败（已重试 %d 次）: %s"
 }

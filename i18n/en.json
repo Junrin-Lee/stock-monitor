@@ -365,5 +365,15 @@
   "watchlist.noTags": "No tags available",
   "group.marketTags": "Market Groups",
   "group.userTags": "User Tags",
-  "group.helpText": "Actions: ↑/↓ select, Enter confirm, C clear filter, ESC/Q back"
+  "group.helpText": "Actions: ↑/↓ select, Enter confirm, C clear filter, ESC/Q back",
+
+  "log.holiday.workerStart": "Holiday data sync worker started",
+  "log.holiday.fetchSuccess": "Successfully fetched %d holiday data",
+  "log.holiday.noDataForYear": "No data for year %d in API",
+  "log.holiday.createFile": "Created new calendar file: %s",
+  "log.holiday.updateFile": "Updated calendar file: %s (changes: %d)",
+  "log.holiday.noChange": "Calendar data unchanged, only updated timestamp",
+  "log.holiday.complete": "Holiday data sync completed in %v",
+  "log.holiday.fetchFailed": "Failed to fetch holiday data: %s",
+  "log.holiday.allRetryFailed": "Holiday data sync failed after %d retries: %s"
 }

@@ -45,6 +45,9 @@ func main() {
 	}
 	defer globalLogger.Sync()
 
+	// 启动节假日数据同步 worker（异步执行，不阻塞主流程）
+	StartHolidayWorker()
+
 	// 加载 i18n 文件
 	loadI18nFiles()
 
