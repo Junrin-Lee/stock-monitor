@@ -366,6 +366,8 @@
   "group.marketTags": "Market Groups",
   "group.userTags": "User Tags",
   "group.helpText": "Actions: ↑/↓ select, Enter confirm, C clear filter, ESC/Q back",
+  "group.helpText.step1": "Actions: ↑/↓ select market, Enter confirm, C clear all, ESC/Q back",
+  "group.helpText.step2": "Actions: ↑/↓ select tag, Enter confirm, B back, C clear all, ESC/Q back",
   "filter.step1.selectMarket": "Step 1: Select Market",
   "filter.step2.selectTag": "Step 2: Select Tag",
   "filter.allMarkets": "All Markets",

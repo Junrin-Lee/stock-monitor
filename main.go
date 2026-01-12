@@ -338,12 +338,7 @@ func (m *Model) View() string {
 	case WatchlistTagEdit:
 		mainContent = m.viewWatchlistTagEdit()
 	case WatchlistGroupSelect:
-		// 根据选择步骤分发视图
-		if m.filterSelectionStep == 0 {
-			mainContent = m.viewWatchlistGroupSelectStep1()
-		} else {
-			mainContent = m.viewWatchlistGroupSelectStep2()
-		}
+		mainContent = m.viewWatchlistGroupSelect()
 	case PortfolioSorting:
 		mainContent = m.viewPortfolioSorting()
 	case WatchlistSorting:
@@ -2491,7 +2486,7 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = ""
 		return m, nil
 	case "g":
-		// 分组查看 (v5.6: 使用分类标签分组，记住上次选择的位置)
+		// 分组查看 (v5.8: 两阶段选择，支持位置记忆)
 		m.tagGroups = m.getTagGroups()
 		totalTags := m.getTotalTagCount()
 
@@ -2500,13 +2495,32 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// 尝试恢复到上次选择的标签位置
-		m.cursor = 0
-		if m.lastSelectedGroupTag != "" {
-			position := m.findTagPositionInGroups(m.lastSelectedGroupTag)
-			if position >= 0 {
-				m.cursor = position
+		// 根据当前过滤状态决定初始阶段和光标位置
+		if m.selectedMarketFilter != "" || m.selectedUserTagFilter != "" {
+			// 有过滤条件：恢复上次选择的位置
+			if m.selectedUserTagFilter != "" {
+				// 已选择了用户标签：进入第二阶段，光标定位到该标签
+				m.filterSelectionStep = 1
+				userTagPos := m.findUserTagPosition(m.selectedUserTagFilter)
+				if userTagPos >= 0 {
+					m.cursor = userTagPos
+				} else {
+					m.cursor = 0 // 未找到则默认第一项
+				}
+			} else {
+				// 只选择了市场：停在第一阶段，光标定位到该市场
+				m.filterSelectionStep = 0
+				marketPos := m.findMarketTagPosition(m.selectedMarketFilter)
+				if marketPos >= 0 {
+					m.cursor = marketPos
+				} else {
+					m.cursor = 0 // 未找到则默认第一项
+				}
 			}
+		} else {
+			// 无过滤条件：从头开始
+			m.filterSelectionStep = 0
+			m.cursor = 0
 		}
 
 		m.state = WatchlistGroupSelect

@@ -255,6 +255,44 @@ func (m *Model) findTagPositionInGroups(tagName string) int {
 	return -1 // 未找到
 }
 
+// findMarketTagPosition 查找市场标签的位置索引(考虑全部市场选项) - v5.8
+// 返回: 0=全部市场, 1=第一个市场标签, 2=第二个市场标签...
+// 如果未找到则返回 -1
+func (m *Model) findMarketTagPosition(marketFilter MarketType) int {
+	if marketFilter == "" {
+		return 0 // "全部市场"在索引0
+	}
+
+	marketTags := m.getMarketTags()
+	targetTag := m.getMarketTagName(marketFilter)
+
+	for i, tag := range marketTags {
+		if tag == targetTag {
+			return i + 1 // +1 因为全部市场占了索引0
+		}
+	}
+
+	return -1 // 未找到
+}
+
+// findUserTagPosition 查找用户标签的位置索引(考虑全部标签选项) - v5.8
+// 返回: 0=全部标签, 1=第一个用户标签, 2=第二个用户标签...
+// 如果未找到则返回 -1
+func (m *Model) findUserTagPosition(tagName string) int {
+	if tagName == "" {
+		return 0 // "全部标签"在索引0
+	}
+
+	userTags := m.getUserTags()
+	for i, tag := range userTags {
+		if tag == tagName {
+			return i + 1 // +1 因为全部标签占了索引0
+		}
+	}
+
+	return -1 // 未找到
+}
+
 // ============================================================================
 // WatchlistStock 标签方法
 // ============================================================================
@@ -600,34 +638,60 @@ func (m *Model) handleWatchlistTagging(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleWatchlistGroupSelect 处理自选股票分组选择（两步选择：市场 → 用户标签）
+// handleWatchlistGroupSelect 处理自选股票分组选择（两阶段选择：先市场后标签，单页显示，支持全部选项）
 func (m *Model) handleWatchlistGroupSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch m.filterSelectionStep {
-	case 0:
-		return m.handleMarketSelection(msg)
-	case 1:
-		return m.handleUserTagSelection(msg)
-	}
-	return m, nil
-}
-
-// handleMarketSelection 处理市场选择（第一步）
-func (m *Model) handleMarketSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	markets := m.getMarketOptions()
+	marketTags := m.getMarketTags()
+	userTags := m.getUserTags()
 
 	switch msg.String() {
 	case "enter":
-		// 选择市场并进入第二步
-		if m.cursor >= 0 && m.cursor < len(markets) {
-			m.selectedMarketFilter = markets[m.cursor]
+		if m.filterSelectionStep == 0 {
+			// 第一阶段：选择市场
+			if m.cursor == 0 {
+				// 选择"全部市场"
+				m.selectedMarketFilter = ""
+			} else if m.cursor > 0 && m.cursor <= len(marketTags) {
+				// 选择具体市场(索引-1因为全部市场占了0)
+				selectedMarketTag := marketTags[m.cursor-1]
+				// 将市场标签转换为MarketType
+				switch selectedMarketTag {
+				case m.getText("marketTag.china"):
+					m.selectedMarketFilter = MarketChina
+				case m.getText("marketTag.us"):
+					m.selectedMarketFilter = MarketUS
+				case m.getText("marketTag.hongkong"):
+					m.selectedMarketFilter = MarketHongKong
+				}
+			}
+			// 进入第二阶段
+			m.filterSelectionStep = 1
+			m.cursor = 0 // 重置光标到自定义标签区域
+			return m, nil
+
+		} else {
+			// 第二阶段：选择用户标签
+			if m.cursor == 0 {
+				// 选择"全部标签"
+				m.selectedUserTagFilter = ""
+			} else if m.cursor > 0 && m.cursor <= len(userTags) {
+				// 选择具体标签(索引-1因为全部标签占了0)
+				m.selectedUserTagFilter = userTags[m.cursor-1]
+				// 保存选择用于位置记忆
+				m.lastSelectedGroupTag = m.selectedUserTagFilter
+			}
+
+			m.invalidateWatchlistCache()
+			m.filterSelectionStep = 0
+			m.state = WatchlistViewing
+			m.resetWatchlistCursor()
+			m.message = ""
+			return m, m.tickCmd()
 		}
-		m.filterSelectionStep = 1
-		m.cursor = 0 // 重置光标用于第二步
-		return m, nil
 
 	case "esc", "q":
 		// 取消并返回自选列表
 		m.filterSelectionStep = 0
+		m.selectedMarketFilter = "" // 重置市场过滤
 		m.state = WatchlistViewing
 		m.message = ""
 		return m, m.tickCmd()
@@ -636,49 +700,6 @@ func (m *Model) handleMarketSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// 清除所有过滤
 		m.selectedMarketFilter = ""
 		m.selectedUserTagFilter = ""
-		m.invalidateWatchlistCache()
-		m.filterSelectionStep = 0
-		m.state = WatchlistViewing
-		m.resetWatchlistCursor()
-		m.message = ""
-		return m, m.tickCmd()
-
-	case "up", "k", "w":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-		return m, nil
-
-	case "down", "j", "s":
-		if m.cursor < len(markets)-1 {
-			m.cursor++
-		}
-		return m, nil
-	}
-
-	return m, nil
-}
-
-// handleUserTagSelection 处理用户标签选择（第二步）
-func (m *Model) handleUserTagSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	tags := m.getUserTagOptions()
-
-	switch msg.String() {
-	case "enter":
-		// 选择标签并应用组合过滤
-		if m.cursor == 0 {
-			m.selectedUserTagFilter = "" // "全部标签" 选项
-		} else if m.cursor > 0 && m.cursor < len(tags) {
-			// 跳过第一个"全部标签"选项，获取实际标签
-			userTags := m.getUserTags()
-			if m.cursor-1 < len(userTags) {
-				m.selectedUserTagFilter = userTags[m.cursor-1]
-			}
-		}
-
-		// 保存选择用于位置记忆
-		m.lastSelectedGroupTag = m.selectedUserTagFilter
-
 		m.invalidateWatchlistCache()
 		m.filterSelectionStep = 0
 		m.state = WatchlistViewing
@@ -687,28 +708,14 @@ func (m *Model) handleUserTagSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.tickCmd()
 
 	case "b", "backspace":
-		// 返回第一步（市场选择）
-		m.filterSelectionStep = 0
-		m.cursor = 0
+		// 如果在第二阶段，返回第一阶段
+		if m.filterSelectionStep == 1 {
+			m.filterSelectionStep = 0
+			m.cursor = 0
+			m.selectedMarketFilter = "" // 清除临时选择的市场
+			return m, nil
+		}
 		return m, nil
-
-	case "esc", "q":
-		// 取消并返回自选列表（保持现有过滤）
-		m.filterSelectionStep = 0
-		m.state = WatchlistViewing
-		m.message = ""
-		return m, m.tickCmd()
-
-	case "c":
-		// 清除所有过滤
-		m.selectedMarketFilter = ""
-		m.selectedUserTagFilter = ""
-		m.invalidateWatchlistCache()
-		m.filterSelectionStep = 0
-		m.state = WatchlistViewing
-		m.resetWatchlistCursor()
-		m.message = ""
-		return m, m.tickCmd()
 
 	case "up", "k", "w":
 		if m.cursor > 0 {
@@ -717,7 +724,15 @@ func (m *Model) handleUserTagSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "down", "j", "s":
-		if m.cursor < len(tags)-1 {
+		// 根据当前阶段限制光标范围(+1因为全部选项)
+		maxCursor := 0
+		if m.filterSelectionStep == 0 {
+			maxCursor = len(marketTags) // 全部市场 + N个市场标签
+		} else {
+			maxCursor = len(userTags) // 全部标签 + N个用户标签
+		}
+
+		if m.cursor < maxCursor {
 			m.cursor++
 		}
 		return m, nil
@@ -780,136 +795,90 @@ func (m *Model) renderCurrentFilterStatus() string {
 	return fmt.Sprintf("%s: %s\n\n", m.getText("watchlist.currentFilter"), strings.Join(parts, " + "))
 }
 
-// viewWatchlistGroupSelectStep1 市场选择视图（第一步）
-func (m *Model) viewWatchlistGroupSelectStep1() string {
-	var s string
-	s += m.getText("watchlist.selectGroup") + "\n\n"
-
-	// 显示当前组合过滤状态
-	s += m.renderCurrentFilterStatus()
-
-	// 步骤指示
-	s += fmt.Sprintf("--- %s ---\n", m.getText("filter.step1.selectMarket"))
-
-	// 市场选项：全部 + 存在的市场
-	markets := []struct {
-		value MarketType
-		label string
-	}{
-		{"", m.getText("filter.allMarkets")},
-	}
-
-	// 添加实际存在的市场
-	hasMarket := m.getExistingMarkets()
-	if hasMarket[MarketChina] {
-		markets = append(markets, struct {
-			value MarketType
-			label string
-		}{MarketChina, m.getText("marketTag.china")})
-	}
-	if hasMarket[MarketUS] {
-		markets = append(markets, struct {
-			value MarketType
-			label string
-		}{MarketUS, m.getText("marketTag.us")})
-	}
-	if hasMarket[MarketHongKong] {
-		markets = append(markets, struct {
-			value MarketType
-			label string
-		}{MarketHongKong, m.getText("marketTag.hongkong")})
-	}
-
-	// 渲染市场选项
-	for i, market := range markets {
-		cursor := " "
-		if i == m.cursor {
-			cursor = ">"
-		}
-		s += fmt.Sprintf("%s %s\n", cursor, market.label)
-	}
-
-	s += "\n" + m.getText("filter.step1.helpText") + "\n"
-	return s
-}
-
-// viewWatchlistGroupSelectStep2 用户标签选择视图（第二步）
-func (m *Model) viewWatchlistGroupSelectStep2() string {
-	var s string
-	s += m.getText("watchlist.selectGroup") + "\n\n"
-
-	// 显示当前组合过滤状态
-	s += m.renderCurrentFilterStatus()
-
-	// 显示已选市场
-	marketLabel := m.getText("filter.allMarkets")
-	if m.selectedMarketFilter != "" {
-		marketLabel = m.getMarketTagName(m.selectedMarketFilter)
-	}
-	s += fmt.Sprintf("%s: %s\n\n", m.getText("filter.selectedMarket"), marketLabel)
-
-	// 步骤指示
-	s += fmt.Sprintf("--- %s ---\n", m.getText("filter.step2.selectTag"))
-
-	// 用户标签选项：全部 + 用户标签
-	tags := m.getUserTagOptions()
-
-	// 渲染标签选项
-	for i, tag := range tags {
-		cursor := " "
-		if i == m.cursor {
-			cursor = ">"
-		}
-		s += fmt.Sprintf("%s %s\n", cursor, tag)
-	}
-
-	s += "\n" + m.getText("filter.step2.helpText") + "\n"
-	return s
-}
-
-// viewWatchlistGroupSelect 分组选择视图 (v5.6: 区分市场分组和用户标签)
+// viewWatchlistGroupSelect 分组选择视图 (v5.8: 两阶段选择，单页显示，支持全部选项)
 func (m *Model) viewWatchlistGroupSelect() string {
 	var s string
 
 	// 标题
 	s += m.getText("watchlist.selectGroup") + "\n\n"
 
-	// 显示当前过滤状态
-	if m.selectedTag != "" {
-		s += fmt.Sprintf("%s: %s\n\n", m.getText("watchlist.currentFilter"), m.selectedTag)
-	}
+	marketTags := m.getMarketTags()
+	userTags := m.getUserTags()
 
 	// 检查是否有可用标签
-	if len(m.tagGroups) == 0 {
+	if len(marketTags) == 0 && len(userTags) == 0 {
 		s += m.getText("watchlist.noTags") + "\n"
 		s += "\n" + m.getText("group.helpText") + "\n"
 		return s
 	}
 
-	// 渲染每个分组及其标签
-	currentPos := 0
-	for groupIdx, group := range m.tagGroups {
-		// 分组之间添加空行
-		if groupIdx > 0 {
-			s += "\n"
+	// 渲染市场标签分组
+	s += fmt.Sprintf("--- %s ---\n", m.getText("group.marketTags"))
+
+	// 第一项：全部市场
+	cursor := " "
+	checkMark := " "
+	if m.filterSelectionStep == 0 && m.cursor == 0 {
+		cursor = ">" // 第一阶段第一项
+	}
+	if m.filterSelectionStep == 1 && m.selectedMarketFilter == "" {
+		checkMark = "✓" // 第二阶段显示勾选(全部市场)
+	}
+	s += fmt.Sprintf("%s %s %s\n", cursor, checkMark, m.getText("filter.allMarkets"))
+
+	// 其余市场标签
+	for i, tag := range marketTags {
+		cursor = " "
+		checkMark = " "
+
+		// 第一阶段：显示光标(索引+1因为全部市场占了0)
+		if m.filterSelectionStep == 0 && i+1 == m.cursor {
+			cursor = ">"
 		}
 
-		// 分组标题（带分隔符）
-		s += fmt.Sprintf("--- %s ---\n", group.Name)
+		// 第二阶段：显示已选市场的勾选标记
+		if m.filterSelectionStep == 1 && m.selectedMarketFilter != "" {
+			selectedMarketTag := m.getMarketTagName(m.selectedMarketFilter)
+			if tag == selectedMarketTag {
+				checkMark = "✓"
+			}
+		}
 
-		// 渲染该分组的标签
-		for _, tag := range group.Tags {
-			cursor := " "
-			if currentPos == m.cursor {
+		s += fmt.Sprintf("%s %s %s\n", cursor, checkMark, tag)
+	}
+	s += "\n"
+
+	// 渲染用户标签分组
+	if len(userTags) > 0 {
+		s += fmt.Sprintf("--- %s ---\n", m.getText("group.userTags"))
+
+		// 第一项：全部标签
+		cursor = " "
+		if m.filterSelectionStep == 1 && m.cursor == 0 {
+			cursor = ">" // 第二阶段第一项
+		}
+		s += fmt.Sprintf("%s %s\n", cursor, m.getText("filter.allTags"))
+
+		// 其余用户标签
+		for i, tag := range userTags {
+			cursor = " "
+
+			// 仅在第二阶段显示光标(索引+1因为全部标签占了0)
+			if m.filterSelectionStep == 1 && i+1 == m.cursor {
 				cursor = ">"
 			}
+
 			s += fmt.Sprintf("%s %s\n", cursor, tag)
-			currentPos++
 		}
+		s += "\n"
 	}
 
 	// 帮助文本
-	s += "\n" + m.getText("group.helpText") + "\n"
+	if m.filterSelectionStep == 0 {
+		s += m.getText("group.helpText.step1") + "\n"
+	} else {
+		s += m.getText("group.helpText.step2") + "\n"
+	}
 
 	return s
 }

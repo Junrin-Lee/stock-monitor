@@ -366,6 +366,8 @@
   "group.marketTags": "市场分组",
   "group.userTags": "自定义标签",
   "group.helpText": "操作: ↑/↓选择, Enter确认, C清除过滤, ESC/Q返回",
+  "group.helpText.step1": "操作: ↑/↓选择市场, Enter确认, C清除所有过滤, ESC/Q返回",
+  "group.helpText.step2": "操作: ↑/↓选择标签, Enter确认, B返回上一步, C清除所有过滤, ESC/Q返回",
   "filter.step1.selectMarket": "第1步: 选择市场",
   "filter.step2.selectTag": "第2步: 选择标签",
   "filter.allMarkets": "全部市场",
