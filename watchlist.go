@@ -147,6 +147,42 @@ func (m *Model) getUserTags() []string {
 	return tags
 }
 
+// getExistingMarkets 获取自选列表中存在的市场类型（用于组合过滤）
+func (m *Model) getExistingMarkets() map[MarketType]bool {
+	hasMarket := make(map[MarketType]bool)
+	for _, stock := range m.watchlist.Stocks {
+		if stock.Market != "" {
+			hasMarket[stock.Market] = true
+		}
+	}
+	return hasMarket
+}
+
+// getMarketOptions 获取市场选项列表（包含"全部市场"选项）
+func (m *Model) getMarketOptions() []MarketType {
+	options := []MarketType{""} // "" 表示"全部市场"
+
+	hasMarket := m.getExistingMarkets()
+	if hasMarket[MarketChina] {
+		options = append(options, MarketChina)
+	}
+	if hasMarket[MarketUS] {
+		options = append(options, MarketUS)
+	}
+	if hasMarket[MarketHongKong] {
+		options = append(options, MarketHongKong)
+	}
+
+	return options
+}
+
+// getUserTagOptions 获取用户标签选项列表（包含"全部标签"选项）
+func (m *Model) getUserTagOptions() []string {
+	options := []string{m.getText("filter.allTags")} // "全部标签"
+	options = append(options, m.getUserTags()...)
+	return options
+}
+
 // getTagGroups 获取分类的标签分组（用于分组选择视图）- v5.6
 func (m *Model) getTagGroups() []TagGroup {
 	groups := make([]TagGroup, 0, 2)
@@ -295,37 +331,41 @@ func (stock *WatchlistStock) getTagsDisplay(m *Model) string {
 // 自选列表过滤和缓存
 // ============================================================================
 
-// getFilteredWatchlist 根据标签过滤自选股票（支持市场标签，带缓存优化）
+// getFilteredWatchlist 根据市场和用户标签过滤自选股票（支持组合过滤，使用 AND 逻辑）
 func (m *Model) getFilteredWatchlist() []WatchlistStock {
-	// 如果没有过滤标签，直接返回完整列表
-	if m.selectedTag == "" {
+	// 如果没有任何过滤条件，直接返回完整列表
+	if m.selectedMarketFilter == "" && m.selectedUserTagFilter == "" {
 		return m.watchlist.Stocks
 	}
 
 	// 检查缓存是否有效
-	if m.isFilteredWatchlistValid && m.cachedFilterTag == m.selectedTag {
+	if m.isFilteredWatchlistValid &&
+		m.cachedFilterMarket == m.selectedMarketFilter &&
+		m.cachedFilterUserTag == m.selectedUserTagFilter {
 		return m.cachedFilteredWatchlist
 	}
 
-	// 重新计算过滤结果并缓存
+	// 重新计算过滤结果并缓存（应用 AND 逻辑）
 	var filtered []WatchlistStock
 	for _, stock := range m.watchlist.Stocks {
-		// 检查是否匹配市场标签
-		marketTag := m.getMarketTagName(stock.Market)
-		if marketTag == m.selectedTag {
-			filtered = append(filtered, stock)
-			continue
+		// 检查市场过滤条件
+		if m.selectedMarketFilter != "" && stock.Market != m.selectedMarketFilter {
+			continue // 市场不匹配，跳过
 		}
 
-		// 检查用户自定义标签
-		if stock.hasTag(m.selectedTag) {
-			filtered = append(filtered, stock)
+		// 检查用户标签过滤条件
+		if m.selectedUserTagFilter != "" && !stock.hasTag(m.selectedUserTagFilter) {
+			continue // 用户标签不匹配，跳过
 		}
+
+		// 两个条件都满足（或未设置），加入过滤结果
+		filtered = append(filtered, stock)
 	}
 
 	// 更新缓存
 	m.cachedFilteredWatchlist = filtered
-	m.cachedFilterTag = m.selectedTag
+	m.cachedFilterMarket = m.selectedMarketFilter
+	m.cachedFilterUserTag = m.selectedUserTagFilter
 	m.isFilteredWatchlistValid = true
 
 	return filtered
@@ -335,7 +375,9 @@ func (m *Model) getFilteredWatchlist() []WatchlistStock {
 func (m *Model) invalidateWatchlistCache() {
 	m.isFilteredWatchlistValid = false
 	m.cachedFilteredWatchlist = nil
-	m.cachedFilterTag = ""
+	m.cachedFilterTag = ""     // 保留用于向后兼容
+	m.cachedFilterMarket = ""  // 清除市场过滤缓存
+	m.cachedFilterUserTag = "" // 清除用户标签过滤缓存
 }
 
 // ============================================================================
@@ -558,51 +600,124 @@ func (m *Model) handleWatchlistTagging(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleWatchlistGroupSelect 处理自选股票分组选择 (v5.6: 支持分组显示和边界停留)
+// handleWatchlistGroupSelect 处理自选股票分组选择（两步选择：市场 → 用户标签）
 func (m *Model) handleWatchlistGroupSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.filterSelectionStep {
+	case 0:
+		return m.handleMarketSelection(msg)
+	case 1:
+		return m.handleUserTagSelection(msg)
+	}
+	return m, nil
+}
+
+// handleMarketSelection 处理市场选择（第一步）
+func (m *Model) handleMarketSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	markets := m.getMarketOptions()
+
 	switch msg.String() {
 	case "enter":
-		// 选择标签并应用过滤
-		selectedTag := m.getTagAtCursor()
-		if selectedTag != "" {
-			m.selectedTag = selectedTag
-			m.lastSelectedGroupTag = selectedTag // 记住这次选择的标签
+		// 选择市场并进入第二步
+		if m.cursor >= 0 && m.cursor < len(markets) {
+			m.selectedMarketFilter = markets[m.cursor]
 		}
-		m.invalidateWatchlistCache() // 使缓存失效
-		m.state = WatchlistViewing
-		m.message = ""
-		m.resetWatchlistCursor() // 重置游标到第一只股票
-		return m, m.tickCmd()    // 重启定时器
+		m.filterSelectionStep = 1
+		m.cursor = 0 // 重置光标用于第二步
+		return m, nil
 
 	case "esc", "q":
-		// 清除过滤并返回
-		m.selectedTag = ""
-		m.invalidateWatchlistCache()
+		// 取消并返回自选列表
+		m.filterSelectionStep = 0
 		m.state = WatchlistViewing
-		m.resetWatchlistCursor()
 		m.message = ""
 		return m, m.tickCmd()
 
 	case "c":
-		// 快捷键：清除过滤
-		m.selectedTag = ""
+		// 清除所有过滤
+		m.selectedMarketFilter = ""
+		m.selectedUserTagFilter = ""
 		m.invalidateWatchlistCache()
+		m.filterSelectionStep = 0
 		m.state = WatchlistViewing
 		m.resetWatchlistCursor()
 		m.message = ""
 		return m, m.tickCmd()
 
 	case "up", "k", "w":
-		// 向上移动，边界停留
 		if m.cursor > 0 {
 			m.cursor--
 		}
 		return m, nil
 
 	case "down", "j", "s":
-		// 向下移动，边界停留
-		totalTags := m.getTotalTagCount()
-		if m.cursor < totalTags-1 {
+		if m.cursor < len(markets)-1 {
+			m.cursor++
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// handleUserTagSelection 处理用户标签选择（第二步）
+func (m *Model) handleUserTagSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	tags := m.getUserTagOptions()
+
+	switch msg.String() {
+	case "enter":
+		// 选择标签并应用组合过滤
+		if m.cursor == 0 {
+			m.selectedUserTagFilter = "" // "全部标签" 选项
+		} else if m.cursor > 0 && m.cursor < len(tags) {
+			// 跳过第一个"全部标签"选项，获取实际标签
+			userTags := m.getUserTags()
+			if m.cursor-1 < len(userTags) {
+				m.selectedUserTagFilter = userTags[m.cursor-1]
+			}
+		}
+
+		// 保存选择用于位置记忆
+		m.lastSelectedGroupTag = m.selectedUserTagFilter
+
+		m.invalidateWatchlistCache()
+		m.filterSelectionStep = 0
+		m.state = WatchlistViewing
+		m.resetWatchlistCursor()
+		m.message = ""
+		return m, m.tickCmd()
+
+	case "b", "backspace":
+		// 返回第一步（市场选择）
+		m.filterSelectionStep = 0
+		m.cursor = 0
+		return m, nil
+
+	case "esc", "q":
+		// 取消并返回自选列表（保持现有过滤）
+		m.filterSelectionStep = 0
+		m.state = WatchlistViewing
+		m.message = ""
+		return m, m.tickCmd()
+
+	case "c":
+		// 清除所有过滤
+		m.selectedMarketFilter = ""
+		m.selectedUserTagFilter = ""
+		m.invalidateWatchlistCache()
+		m.filterSelectionStep = 0
+		m.state = WatchlistViewing
+		m.resetWatchlistCursor()
+		m.message = ""
+		return m, m.tickCmd()
+
+	case "up", "k", "w":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+		return m, nil
+
+	case "down", "j", "s":
+		if m.cursor < len(tags)-1 {
 			m.cursor++
 		}
 		return m, nil
@@ -645,6 +760,110 @@ func (m *Model) viewWatchlistTagging() string {
 		}
 	}
 
+	return s
+}
+
+// renderCurrentFilterStatus 渲染当前组合过滤状态（用于两步选择视图）
+func (m *Model) renderCurrentFilterStatus() string {
+	if m.selectedMarketFilter == "" && m.selectedUserTagFilter == "" {
+		return ""
+	}
+
+	var parts []string
+	if m.selectedMarketFilter != "" {
+		parts = append(parts, m.getMarketTagName(m.selectedMarketFilter))
+	}
+	if m.selectedUserTagFilter != "" {
+		parts = append(parts, m.selectedUserTagFilter)
+	}
+
+	return fmt.Sprintf("%s: %s\n\n", m.getText("watchlist.currentFilter"), strings.Join(parts, " + "))
+}
+
+// viewWatchlistGroupSelectStep1 市场选择视图（第一步）
+func (m *Model) viewWatchlistGroupSelectStep1() string {
+	var s string
+	s += m.getText("watchlist.selectGroup") + "\n\n"
+
+	// 显示当前组合过滤状态
+	s += m.renderCurrentFilterStatus()
+
+	// 步骤指示
+	s += fmt.Sprintf("--- %s ---\n", m.getText("filter.step1.selectMarket"))
+
+	// 市场选项：全部 + 存在的市场
+	markets := []struct {
+		value MarketType
+		label string
+	}{
+		{"", m.getText("filter.allMarkets")},
+	}
+
+	// 添加实际存在的市场
+	hasMarket := m.getExistingMarkets()
+	if hasMarket[MarketChina] {
+		markets = append(markets, struct {
+			value MarketType
+			label string
+		}{MarketChina, m.getText("marketTag.china")})
+	}
+	if hasMarket[MarketUS] {
+		markets = append(markets, struct {
+			value MarketType
+			label string
+		}{MarketUS, m.getText("marketTag.us")})
+	}
+	if hasMarket[MarketHongKong] {
+		markets = append(markets, struct {
+			value MarketType
+			label string
+		}{MarketHongKong, m.getText("marketTag.hongkong")})
+	}
+
+	// 渲染市场选项
+	for i, market := range markets {
+		cursor := " "
+		if i == m.cursor {
+			cursor = ">"
+		}
+		s += fmt.Sprintf("%s %s\n", cursor, market.label)
+	}
+
+	s += "\n" + m.getText("filter.step1.helpText") + "\n"
+	return s
+}
+
+// viewWatchlistGroupSelectStep2 用户标签选择视图（第二步）
+func (m *Model) viewWatchlistGroupSelectStep2() string {
+	var s string
+	s += m.getText("watchlist.selectGroup") + "\n\n"
+
+	// 显示当前组合过滤状态
+	s += m.renderCurrentFilterStatus()
+
+	// 显示已选市场
+	marketLabel := m.getText("filter.allMarkets")
+	if m.selectedMarketFilter != "" {
+		marketLabel = m.getMarketTagName(m.selectedMarketFilter)
+	}
+	s += fmt.Sprintf("%s: %s\n\n", m.getText("filter.selectedMarket"), marketLabel)
+
+	// 步骤指示
+	s += fmt.Sprintf("--- %s ---\n", m.getText("filter.step2.selectTag"))
+
+	// 用户标签选项：全部 + 用户标签
+	tags := m.getUserTagOptions()
+
+	// 渲染标签选项
+	for i, tag := range tags {
+		cursor := " "
+		if i == m.cursor {
+			cursor = ">"
+		}
+		s += fmt.Sprintf("%s %s\n", cursor, tag)
+	}
+
+	s += "\n" + m.getText("filter.step2.helpText") + "\n"
 	return s
 }
 

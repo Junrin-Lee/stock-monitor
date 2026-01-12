@@ -175,24 +175,29 @@ type Model struct {
 	watchlistCursor    int // 自选列表当前选中行
 
 	// For watchlist tagging and grouping
-	selectedTag          string     // 当前选择的标签过滤
-	availableTags        []string   // 所有可用的标签列表
-	tagGroups            []TagGroup // 标签分组（市场分组 + 用户标签）- v5.6
-	lastSelectedGroupTag string     // 上次在分组选择中选中的标签（用于记住位置）- v5.6
-	tagInput             string     // 标签输入框内容
-	tagInputCursor       int        // 标签输入光标位置
-	tagSelectCursor      int        // 标签选择界面的游标位置
-	currentStockTags     []string   // 当前选中股票的标签列表（用于删除管理）
-	tagManageCursor      int        // 标签管理界面的游标位置
-	tagRemoveCursor      int        // 标签删除选择界面的游标位置
-	isInRemoveMode       bool       // 是否处于删除模式
-	tagToEdit            string     // 要编辑的原标签名称
-	tagEditInput         string     // 标签编辑输入框内容
-	tagEditInputCursor   int        // 标签编辑输入光标位置
+	selectedTag           string     // 当前选择的标签过滤（已弃用，保留用于向后兼容）
+	selectedMarketFilter  MarketType // 市场过滤条件："" 表示全部市场，或具体市场类型
+	selectedUserTagFilter string     // 用户标签过滤条件："" 表示全部标签，或具体用户标签
+	filterSelectionStep   int        // 过滤选择步骤：0=市场选择, 1=用户标签选择
+	availableTags         []string   // 所有可用的标签列表
+	tagGroups             []TagGroup // 标签分组（市场分组 + 用户标签）- v5.6
+	lastSelectedGroupTag  string     // 上次在分组选择中选中的标签（用于记住位置）- v5.6
+	tagInput              string     // 标签输入框内容
+	tagInputCursor        int        // 标签输入光标位置
+	tagSelectCursor       int        // 标签选择界面的游标位置
+	currentStockTags      []string   // 当前选中股票的标签列表（用于删除管理）
+	tagManageCursor       int        // 标签管理界面的游标位置
+	tagRemoveCursor       int        // 标签删除选择界面的游标位置
+	isInRemoveMode        bool       // 是否处于删除模式
+	tagToEdit             string     // 要编辑的原标签名称
+	tagEditInput          string     // 标签编辑输入框内容
+	tagEditInputCursor    int        // 标签编辑输入光标位置
 
 	// Performance optimization - cached filtered watchlist
 	cachedFilteredWatchlist  []WatchlistStock // 缓存的过滤后自选列表
-	cachedFilterTag          string           // 缓存的过滤标签
+	cachedFilterTag          string           // 缓存的过滤标签（已弃用）
+	cachedFilterMarket       MarketType       // 缓存的市场过滤条件
+	cachedFilterUserTag      string           // 缓存的用户标签过滤条件
 	isFilteredWatchlistValid bool             // 缓存是否有效
 
 	// For sorting - 持股列表排序状态

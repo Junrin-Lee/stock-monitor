@@ -338,7 +338,12 @@ func (m *Model) View() string {
 	case WatchlistTagEdit:
 		mainContent = m.viewWatchlistTagEdit()
 	case WatchlistGroupSelect:
-		mainContent = m.viewWatchlistGroupSelect()
+		// 根据选择步骤分发视图
+		if m.filterSelectionStep == 0 {
+			mainContent = m.viewWatchlistGroupSelectStep1()
+		} else {
+			mainContent = m.viewWatchlistGroupSelectStep2()
+		}
 	case PortfolioSorting:
 		mainContent = m.viewPortfolioSorting()
 	case WatchlistSorting:
@@ -2508,15 +2513,16 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = ""
 		return m, nil
 	case "c":
-		// 清除标签过滤
-		if m.selectedTag != "" {
-			m.selectedTag = ""
+		// 清除所有过滤（市场过滤和用户标签过滤）
+		if m.selectedMarketFilter != "" || m.selectedUserTagFilter != "" {
+			m.selectedMarketFilter = ""
+			m.selectedUserTagFilter = ""
 			m.invalidateWatchlistCache() // 使缓存失效
 			m.resetWatchlistCursor()     // 重置游标到第一只股票
 			if m.language == Chinese {
-				m.message = "已清除标签过滤"
+				m.message = "已清除所有过滤条件"
 			} else {
-				m.message = "Tag filter cleared"
+				m.message = "All filters cleared"
 			}
 		}
 		return m, nil
@@ -2546,12 +2552,20 @@ func (m *Model) viewWatchlistViewing() string {
 	s := m.getText("watchlistTitle") + "\n"
 	s += fmt.Sprintf(m.getText("updateTime"), m.lastUpdate.Format("2006-01-02 15:04:05")) + "\n"
 
-	// 显示当前过滤状态
-	if m.selectedTag != "" {
+	// 显示当前组合过滤状态
+	if m.selectedMarketFilter != "" || m.selectedUserTagFilter != "" {
+		var filterParts []string
+		if m.selectedMarketFilter != "" {
+			filterParts = append(filterParts, m.getMarketTagName(m.selectedMarketFilter))
+		}
+		if m.selectedUserTagFilter != "" {
+			filterParts = append(filterParts, m.selectedUserTagFilter)
+		}
+
 		if m.language == Chinese {
-			s += fmt.Sprintf("当前过滤: %s\n", m.selectedTag)
+			s += fmt.Sprintf("当前过滤: %s\n", strings.Join(filterParts, " + "))
 		} else {
-			s += fmt.Sprintf("Current filter: %s\n", m.selectedTag)
+			s += fmt.Sprintf("Current filter: %s\n", strings.Join(filterParts, " + "))
 		}
 	}
 	s += "\n"
@@ -2560,13 +2574,22 @@ func (m *Model) viewWatchlistViewing() string {
 	filteredStocks := m.getFilteredWatchlist()
 
 	if len(filteredStocks) == 0 {
-		if m.selectedTag != "" {
-			if m.language == Chinese {
-				s += fmt.Sprintf("标签 '%s' 下没有股票\n\n", m.selectedTag)
-				s += "按G键选择其他标签，或按C键清除过滤\n"
+		if m.selectedMarketFilter != "" || m.selectedUserTagFilter != "" {
+			var filterDesc string
+			if m.selectedMarketFilter != "" && m.selectedUserTagFilter != "" {
+				filterDesc = m.getMarketTagName(m.selectedMarketFilter) + " + " + m.selectedUserTagFilter
+			} else if m.selectedMarketFilter != "" {
+				filterDesc = m.getMarketTagName(m.selectedMarketFilter)
 			} else {
-				s += fmt.Sprintf("No stocks under tag '%s'\n\n", m.selectedTag)
-				s += "Press G to select other tags, or C to clear filter\n"
+				filterDesc = m.selectedUserTagFilter
+			}
+
+			if m.language == Chinese {
+				s += fmt.Sprintf("过滤条件 '%s' 下没有股票\n\n", filterDesc)
+				s += "按G键选择其他过滤条件，或按C键清除过滤\n"
+			} else {
+				s += fmt.Sprintf("No stocks under filter '%s'\n\n", filterDesc)
+				s += "Press G to select other filters, or C to clear filter\n"
 			}
 		} else {
 			s += m.getText("emptyWatchlist") + "\n\n"
