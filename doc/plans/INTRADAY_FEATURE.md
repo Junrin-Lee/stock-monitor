@@ -76,7 +76,7 @@ data/
 ## 使用方法
 
 ### 正常使用
-1. 启动程序: `./stock-monitor`
+1. 启动程序: `./cmd/stock-monitor`
 2. 进入持股列表或自选列表
 3. 系统自动开始采集分时数据
 4. 退出页面时自动停止
@@ -241,7 +241,7 @@ cat cmd/conf/config.yml | grep debug_mode
 sed -i '' 's/debug_mode: false/debug_mode: true/' cmd/conf/config.yml
 
 # 2. 运行程序
-./stock-monitor
+./cmd/stock-monitor
 
 # 3. 进入持股/自选页面,按'd'查看日志
 
