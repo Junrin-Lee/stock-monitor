@@ -236,6 +236,35 @@ type Model struct {
 	searchIntradayUpdateCh chan struct{} // 数据更新通知 channel
 	searchChartWidth       int           // 搜索图表宽度（响应式布局）
 	searchChartHeight      int           // 搜索图表高度
+
+	// For alert management - 告警管理相关字段
+	alertData              AlertData        // 告警数据
+	alertCursor            int              // 告警列表光标
+	alertScrollPos         int              // 告警滚动位置
+	alertManageStep        int              // 告警管理步骤
+	alertInput             string           // 告警输入
+	alertInputCursor       int              // 输入光标
+	selectedAlertType      AlertType        // 选中的告警类型
+	selectedAlertCondition string           // 选中的告警条件
+	alertThreshold         float64          // 告警阈值
+	currentAlert           Alert            // 当前操作的告警
+	batchAlertTag          string           // 批量添加的标签
+	stockAlertCode         string           // 当前股票的代码（StockAlertManage状态使用）
+	stockAlertName         string           // 当前股票的名称（StockAlertManage状态使用）
+	stockAlertCursor       int              // 股票告警列表光标
+	stockAlertAlerts       []Alert          // 当前股票的所有告警（缓存）
+	batchSelectedStocks    []string         // 批量选中的股票代码
+	batchStockSource       BatchStockSource // 批量股票来源
+	batchSelectStep        int              // 批量选择步骤
+	batchCodeInput         string           // 批量输入的股票代码
+	stockSelectionMap      map[string]bool  // 股票选择状态映射（code -> selected）
+	batchSelectedMarket    string           // 选中的市场类型（"china"/"us"/"hongkong"）
+	marketCursor           int              // 市场选择光标
+
+	// For alert frequency selection - 告警频率选择相关字段
+	selectedAlertFrequency TriggerFrequency // 选中的触发频率
+	alertFrequencyDays     int              // 自定义天数间隔
+	alertFrequencyCursor   int              // 频率选择光标
 }
 
 // tickMsg 定时刷新消息
@@ -341,3 +370,56 @@ type TagGroup struct {
 	Name string   // 分组名称 (如 "市场分组", "自定义标签")
 	Tags []string // 该分组下的标签列表
 }
+
+// AlertType 告警类型
+type AlertType string
+
+const (
+	AlertTypePrice  AlertType = "price"  // 价格告警
+	AlertTypeRate   AlertType = "rate"   // 涨跌幅告警
+	AlertTypeVolume AlertType = "volume" // 成交量告警
+)
+
+// TriggerFrequency 触发频率类型
+type TriggerFrequency string
+
+const (
+	TriggerOnce       TriggerFrequency = "once"         // 一次性
+	TriggerDaily      TriggerFrequency = "daily"        // 每天一次
+	TriggerWeekly     TriggerFrequency = "weekly"       // 每周一次
+	TriggerMonthly    TriggerFrequency = "monthly"      // 每月一次
+	TriggerEveryNDays TriggerFrequency = "every_n_days" // 每 N 天一次
+)
+
+// Alert 告警规则
+type Alert struct {
+	ID            string           `json:"id"`             // 唯一标识符（UUID v4）
+	StockCode     string           `json:"code"`           // 股票代码
+	StockName     string           `json:"name"`           // 股票名称
+	Type          AlertType        `json:"type"`           // 告警类型
+	Condition     string           `json:"condition"`      // 条件（">" / "<" / ">=" / "<="）
+	Threshold     float64          `json:"threshold"`      // 阈值（价格或百分比）
+	IsActive      bool             `json:"is_active"`      // 是否启用
+	Frequency     TriggerFrequency `json:"frequency"`      // 触发频率
+	FrequencyDays int              `json:"frequency_days"` // 自定义天数间隔（仅 every_n_days 模式）
+	CreatedAt     time.Time        `json:"created_at"`     // 创建时间
+	TriggeredAt   time.Time        `json:"triggered_at"`   // 最后触发时间
+	LastChecked   time.Time        `json:"last_checked"`   // 最后检查时间
+	BatchTag      string           `json:"batch_tag"`      // 批量标签名（批量添加时）
+}
+
+// AlertData 告警配置文件
+type AlertData struct {
+	Alerts     []Alert `json:"alerts"`
+	LastCheck  string  `json:"last_check"`
+	AlertCount int     `json:"alert_count"`
+}
+
+// BatchStockSource 批量股票来源类型
+type BatchStockSource int
+
+const (
+	BatchSourceWatchlist BatchStockSource = iota // 从自选列表
+	BatchSourcePortfolio                         // 从持股列表
+	BatchSourceManual                            // 手动输入
+)

@@ -351,3 +351,64 @@ func contains(slice []string, str string) bool {
 	}
 	return false
 }
+
+// ============================================================================
+// Alert 告警数据持久化
+// ============================================================================
+
+// migrateAlertFrequency 迁移告警频率数据（向后兼容）
+// 确保旧数据的 Frequency 字段有有效值
+func migrateAlertFrequency(alerts []Alert) []Alert {
+	for i, alert := range alerts {
+		// 如果 Frequency 未设置，默认为一次性告警
+		if alert.Frequency == "" {
+			alerts[i].Frequency = TriggerOnce
+		}
+		// 确保 FrequencyDays 有有效默认值
+		if alert.Frequency == TriggerEveryNDays && alert.FrequencyDays <= 0 {
+			alerts[i].FrequencyDays = 1
+		}
+	}
+	return alerts
+}
+
+// loadAlertData 从文件加载告警数据
+func loadAlertData() AlertData {
+	data, err := os.ReadFile(alertFile)
+	if err != nil {
+		return AlertData{
+			Alerts:     []Alert{},
+			LastCheck:  "",
+			AlertCount: 0,
+		}
+	}
+
+	var alertData AlertData
+	err = json.Unmarshal(data, &alertData)
+	if err != nil {
+		return AlertData{
+			Alerts:     []Alert{},
+			LastCheck:  "",
+			AlertCount: 0,
+		}
+	}
+
+	// 迁移旧数据到新的频率格式
+	alertData.Alerts = migrateAlertFrequency(alertData.Alerts)
+
+	return alertData
+}
+
+// saveAlertData 保存告警数据到文件
+func (m *Model) saveAlertData() {
+	m.alertData.AlertCount = len(m.alertData.Alerts)
+	data, err := json.MarshalIndent(m.alertData, "", "  ")
+	if err != nil {
+		logError("log.alert.saveFailed", err)
+		return
+	}
+	err = os.WriteFile(alertFile, data, 0644)
+	if err != nil {
+		logError("log.alert.writeFileFailed", err)
+	}
+}

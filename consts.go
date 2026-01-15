@@ -6,6 +6,7 @@ import "time"
 const (
 	dataFile        = "data/portfolio.json"
 	watchlistFile   = "data/watchlist.json"
+	alertFile       = "data/alert.json"
 	configFile      = "cmd/conf/config.yml"
 	refreshInterval = 5 * time.Second
 )
@@ -41,6 +42,24 @@ const (
 	PortfolioSorting         // 持股列表排序状态
 	WatchlistSorting         // 自选列表排序状态
 	IntradayChartViewing     // 分时图表查看状态
+	AlertManage              // 告警管理状态（直接显示列表）
+	StockAlertManage         // 股票告警详情状态（单个股票的告警管理）
+	AlertAdd                 // 添加告警状态
+	AlertBatchMethodSelect   // 批量添加方式选择状态
+	AlertBatchByTag          // 按标签批量添加状态
+	AlertBatchByMarket       // 按市场批量添加状态
+	AlertBatchByStocks       // 按股票列表批量添加状态
+	SelectBatchStocks        // 选择批量股票状态
+	SelectBatchFromWatchlist // 从自选列表选择股票状态
+	SelectBatchFromPortfolio // 从持股列表选择股票状态
+	InputBatchCodes          // 手动输入股票代码状态
+	AlertEdit                // 编辑告警状态
+	AlertTypeSelect          // 选择告警类型状态
+	AlertThresholdInput      // 输入阈值状态
+	AlertConditionSelect     // 选择条件状态
+	AlertBatchAdd            // 批量添加告警状态
+	AlertFrequencySelect     // 选择告警触发频率状态
+	AlertFrequencyDaysInput  // 输入自定义天数状态
 )
 
 // 排序字段枚举

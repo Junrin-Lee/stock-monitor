@@ -25,6 +25,7 @@ func (m *Model) getMenuItems() []string {
 		m.getText("stockList"),
 		m.getText("watchlist"),
 		m.getText("stockSearch"),
+		m.getText("alertManagement"),
 		m.getText("language"),
 		m.getText("exit"),
 	}
@@ -100,12 +101,13 @@ func main() {
 		config:             config,
 		language:           language,
 		lastUpdate:         lastUpdate,
-		portfolioScrollPos: 0,     // 持股列表滚动位置
-		watchlistScrollPos: 0,     // 自选列表滚动位置
-		portfolioCursor:    0,     // 持股列表游标
-		watchlistCursor:    0,     // 自选列表游标
-		portfolioIsSorted:  false, // 持股列表默认未排序状态
-		watchlistIsSorted:  false, // 自选列表默认未排序状态
+		alertData:          loadAlertData(), // 启动时加载告警数据
+		portfolioScrollPos: 0,               // 持股列表滚动位置
+		watchlistScrollPos: 0,               // 自选列表滚动位置
+		portfolioCursor:    0,               // 持股列表游标
+		watchlistCursor:    0,               // 自选列表游标
+		portfolioIsSorted:  false,           // 持股列表默认未排序状态
+		watchlistIsSorted:  false,           // 自选列表默认未排序状态
 		// 股价缓存初始化
 		stockPriceCache:      make(map[string]*StockPriceCacheEntry),
 		stockPriceUpdateTime: time.Time{}, // 初始化为零时间
@@ -198,6 +200,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newModel, cmd = m.handleWatchlistSorting(msg)
 		case IntradayChartViewing:
 			newModel, cmd = m.handleIntradayChartViewing(msg)
+		case AlertManage:
+			newModel, cmd = m.handleAlertManage(msg)
+		case StockAlertManage:
+			newModel, cmd = m.handleStockAlertManage(msg)
+		case AlertAdd:
+			newModel, cmd = m.handleAlertAdd(msg)
+		case AlertEdit:
+			newModel, cmd = m.handleAlertEdit(msg)
+		case AlertBatchMethodSelect:
+			newModel, cmd = m.handleAlertBatchMethodSelect(msg)
+		case AlertBatchByTag:
+			newModel, cmd = m.handleAlertBatchByTag(msg)
+		case AlertBatchByMarket:
+			newModel, cmd = m.handleAlertBatchByMarket(msg)
+		case SelectBatchStocks:
+			newModel, cmd = m.handleSelectBatchStocks(msg)
+		case SelectBatchFromWatchlist:
+			newModel, cmd = m.handleSelectBatchFromWatchlist(msg)
+		case SelectBatchFromPortfolio:
+			newModel, cmd = m.handleSelectBatchFromPortfolio(msg)
+		case InputBatchCodes:
+			newModel, cmd = m.handleInputBatchCodes(msg)
+		case AlertBatchAdd:
+			newModel, cmd = m.handleAlertBatchAdd(msg)
 		default:
 			newModel, cmd = m, nil
 		}
@@ -214,6 +240,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, stockPriceCmd)
 			}
 
+			// 【新增】检查告警
+			if len(m.alertData.Alerts) > 0 {
+				cmds = append(cmds, func() tea.Msg {
+					return checkAlertsMsg{}
+				})
+			}
+
 			newModel, cmd = m, tea.Batch(cmds...)
 		} else {
 			newModel, cmd = m, nil
@@ -221,6 +254,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fetchStockPriceTriggerMsg:
 		// 触发单个股票的价格获取（两阶段更新模式）
 		newModel, cmd = m, fetchStockPriceCmd(msg.symbol)
+	case checkAlertsMsg:
+		// 处理告警检查
+		newModel, cmd = m.handleCheckAlerts(msg)
 	case stockPriceUpdateMsg:
 		// 处理股价数据更新
 		if msg.Error == nil && msg.Data != nil {
@@ -348,6 +384,30 @@ func (m *Model) View() string {
 		termWidth := 120
 		termHeight := 30
 		mainContent = m.viewIntradayChart(termWidth, termHeight)
+	case AlertManage:
+		mainContent = m.viewAlertManage()
+	case StockAlertManage:
+		mainContent = m.viewStockAlertManage()
+	case AlertAdd:
+		mainContent = m.viewAlertAdd()
+	case AlertEdit:
+		mainContent = m.viewAlertEdit()
+	case AlertBatchMethodSelect:
+		mainContent = m.viewAlertBatchMethodSelect()
+	case AlertBatchByTag:
+		mainContent = m.viewAlertBatchByTag()
+	case AlertBatchByMarket:
+		mainContent = m.viewAlertBatchByMarket()
+	case SelectBatchStocks:
+		mainContent = m.viewSelectBatchStocks()
+	case SelectBatchFromWatchlist:
+		mainContent = m.viewSelectBatchFromWatchlist()
+	case SelectBatchFromPortfolio:
+		mainContent = m.viewSelectBatchFromPortfolio()
+	case InputBatchCodes:
+		mainContent = m.viewInputBatchCodes()
+	case AlertBatchAdd:
+		mainContent = m.viewAlertBatchAdd()
 	default:
 		mainContent = ""
 	}
@@ -418,7 +478,13 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 		m.searchFromWatchlist = false
 		m.message = ""
 		return m, nil
-	case 3: // 语言选择页面
+	case 3: // 告警管理
+		logInfo("log.action.enterAlertManagement")
+		m.state = AlertManage
+		m.alertCursor = 0
+		m.alertData = loadAlertData()
+		return m, nil
+	case 4: // 语言选择页面
 		logInfo("log.action.enterLanguage")
 		m.state = LanguageSelection
 		m.languageCursor = 0
@@ -426,7 +492,7 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 			m.languageCursor = 1
 		}
 		return m, nil
-	case 4: // 退出
+	case 5: // 退出
 		logInfo("log.action.exit")
 		m.savePortfolio()
 		m.saveWatchlist()
@@ -444,7 +510,7 @@ func (m *Model) viewMainMenu() string {
 			prefix = "► "
 		}
 
-		if i == 3 { // 语言选择
+		if i == 4 { // 语言选择
 			langStatus := m.getText("english")
 			if m.language == Chinese {
 				langStatus = m.getText("chinese")
@@ -774,6 +840,27 @@ func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = PortfolioSorting
 		// 智能定位光标到当前排序字段
 		m.portfolioSortCursor = m.findSortFieldIndex(m.portfolioSortField, true)
+		m.message = ""
+		return m, nil
+	case "l", "L":
+		// 查看股票告警详情
+		if len(m.portfolio.Stocks) == 0 {
+			m.message = m.getText("emptyPortfolio")
+			return m, nil
+		}
+		currentStock := m.portfolio.Stocks[m.portfolioCursor]
+
+		// 设置股票告警详情参数
+		m.stockAlertCode = currentStock.Code
+		m.stockAlertName = currentStock.Name
+		m.stockAlertCursor = 0
+		m.previousState = Monitoring // 记录返回状态
+
+		// 获取该股票的所有告警
+		m.stockAlertAlerts = m.getStockAlerts(currentStock.Code)
+
+		logInfo("log.action.enterStockAlertManagement", currentStock.Code, currentStock.Name)
+		m.state = StockAlertManage
 		m.message = ""
 		return m, nil
 	case "up", "k", "w":
@@ -2483,6 +2570,29 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tagManageCursor = 0
 		m.tagInput = ""
 		m.isInRemoveMode = false
+		m.message = ""
+		return m, nil
+	case "l", "L":
+		// 查看股票告警详情
+		filteredStocks := m.getFilteredWatchlist()
+		if len(filteredStocks) == 0 {
+			m.message = m.getText("emptyWatchlist")
+			return m, nil
+		}
+
+		currentStock := filteredStocks[m.watchlistCursor]
+
+		// 设置股票告警详情参数
+		m.stockAlertCode = currentStock.Code
+		m.stockAlertName = currentStock.Name
+		m.stockAlertCursor = 0
+		m.previousState = WatchlistViewing // 记录返回状态
+
+		// 获取该股票的所有告警
+		m.stockAlertAlerts = m.getStockAlerts(currentStock.Code)
+
+		logInfo("log.action.enterStockAlertManagement", currentStock.Code, currentStock.Name)
+		m.state = StockAlertManage
 		m.message = ""
 		return m, nil
 	case "g":
