@@ -1,6 +1,6 @@
 # Stock Monitor - 股票监控系统
 
-[![Version](https://img.shields.io/badge/version-v5.8-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v6.0-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -42,6 +42,7 @@
 | **全球市场** | 支持 A 股、美股、港股等主流市场股票代码格式 |
 | **多语言** | 完整的中英文双语界面支持 |
 | **数据持久** | 本地 JSON 存储，投资组合数据永不丢失 |
+| **股票告警** ⏰ | 价格/涨跌幅/成交量告警，支持5种触发频率（一次/每天/每周/每月/自定义），3种批量添加方式 |
 
 ### 界面特性
 
@@ -195,6 +196,16 @@ go build -o cmd/stock-monitor
 | `Enter` | 应用排序/切换升降序 |
 | `C` | 清除排序 |
 
+### 告警列表专用快捷键
+
+| 按键 | 功能 |
+|------|------|
+| `A` | 添加单个告警 |
+| `B` | 批量添加告警 |
+| `E` | 编辑告警 |
+| `D` | 删除告警 |
+| `Space` | 启用/禁用告警 |
+
 ---
 
 ## 系统架构
@@ -228,19 +239,23 @@ go build -o cmd/stock-monitor
 
 | 模块 | 代码行数 | 职责 | 说明 |
 |------|:--------:|------|------|
-| `main.go` | 3,142 | 状态机与事件处理 | 核心应用逻辑，19个状态，Bubble Tea 事件循环 |
+| `main.go` | 3,259 | 状态机与事件处理 | 核心应用逻辑，29个状态，Bubble Tea 事件循环 |
+| `alert.go` | 2,572 | 告警系统核心 | 3种告警类型、CRUD操作、跨平台通知（macOS/Linux/Windows）、批量添加流程 |
 | `intraday.go` | 1,539 | 分时采集 | 后台工作池（最多10并发），每分钟自动更新，智能worker管理 |
 | `api.go` | 1,355 | API 集成 | 多数据源获取与自动容错机制（腾讯、新浪、东方财富） |
 | `intraday_chart.go` | 1,260 | 分时图表 | Braille 字符渲染，智能日期选择，自适应Y轴，搜索模式支持 |
+| `alert_frequency.go` | 161 | 触发频率控制 | 5种频率模式、高效触发检查、时间边界处理 |
 | `watchlist.go` | 696 | 自选管理 | 多标签操作、筛选、分组、搜索、市场标签、标签分组 |
 | `columns.go` | 492 | 列配置系统 | 可定制表格列，灵活配置 |
 | `persistence.go` | 353 | 数据持久化 | JSON/YAML 读写，备份恢复，数据迁移 |
-| `types.go` | 341 | 数据结构 | Stock, StockData, Config, MarketType, TagGroup 等核心类型 |
+| `types.go` | 425 | 数据结构 | Stock, StockData, Config, MarketType, TagGroup, Alert 等核心类型 |
 | `intraday_test.go` | 328 | 分时测试 | 市场检测、采集模式、worker管理、数据比较测试 |
+| `alert_frequency_test.go` | 419 | 告警频率测试 | 12个测试用例覆盖所有频率类型、边界情况 |
 | `sort.go` | 238 | 排序引擎 | 11个持股字段 + 7个自选字段排序 |
 | `ui_utils.go` | 194 | UI 工具 | 表格格式化，中文宽度处理，分页 |
 | `timezone.go` | 172 | 时区处理 | 多市场时区转换，交易状态检测 |
-| `debug.go` | 160 | 调试日志 | 1000条缓冲，滚动查看器，条件日志 |
+| `logger.go` | 189 | zap日志系统 | 结构化日志、日志轮转、并发保护 (v5.8) |
+| `log.go` | 129 | 日志接口 | 四个日志级别、文本格式化、i18n集成 (v5.8) |
 | `format.go` | 156 | 格式化 | 数字格式化，价格显示，百分比计算 |
 | `cache.go` | 127 | 价格缓存 | 30秒 TTL，RWMutex 并发保护 |
 | `api_test.go` | 87 | API测试 | API回退逻辑、代码转换、港股检测测试 |
@@ -595,6 +610,7 @@ A股实时数据:  腾讯 API → 新浪 API → 显示 "-"
 
 | 版本 | 发布时间 | 主要更新 | 文档 |
 |------|----------|----------|------|
+| **v6.0** | 2026年1月 | 🔔 股票告警系统、频率控制、批量操作、跨平台通知 | [查看详情](doc/changelogs/v6.0.md) |
 | **v5.8** | 2026年1月 | 📊 结构化日志系统、zap集成、日志轮转、i18n支持 | [查看详情](doc/changelogs/v5.8.md) |
 | v5.7 | 2025年12月 | 🏷️ 自选标签分组系统、位置记忆、边界停留 | [查看详情](doc/changelogs/v5.7.md) |
 | v5.6 | 2025年12月 | 🔍 搜索视图增强、实时分时图、自动刷新 | [查看详情](doc/changelogs/v5.6.md) |
