@@ -1,6 +1,6 @@
 # Stock Monitor - Stock Monitoring System
 
-[![Version](https://img.shields.io/badge/version-v5.8-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v6.0-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -42,6 +42,7 @@ A professional command-line stock monitoring tool built with the Bubble Tea fram
 | **Global Markets** | Support for A-shares, US stocks, Hong Kong stocks code formats |
 | **Multi-language** | Complete Chinese and English bilingual interface |
 | **Data Persistence** | Local JSON storage, portfolio data never lost |
+| **Stock Alerts** ⏰ | Price/change percent/volume alerts with 5 trigger frequencies (once/daily/weekly/monthly/custom), 3 batch add methods |
 
 ### Interface Features
 
@@ -195,6 +196,16 @@ Press `V` key to view the intraday chart for the selected stock:
 | `Enter` | Apply sort/toggle order |
 | `C` | Clear sort |
 
+### Alert List Specific
+
+| Key | Function |
+|-----|----------|
+| `A` | Add single alert |
+| `B` | Batch add alerts |
+| `E` | Edit alert |
+| `D` | Delete alert |
+| `Space` | Toggle alert enabled/disabled |
+
 ---
 
 ## Architecture
@@ -228,19 +239,23 @@ Press `V` key to view the intraday chart for the selected stock:
 
 | Module | Lines | Responsibility | Description |
 |--------|:-----:|----------------|-------------|
-| `main.go` | 3,142 | State Machine & Event Handling | Core app logic, 19 states, Bubble Tea event loop |
+| `main.go` | 3,259 | State Machine & Event Handling | Core app logic, 29 states (11 alert management states), Bubble Tea event loop |
+| `alert.go` | 2,572 | Alert System | 3 alert types, CRUD operations, cross-platform notifications (macOS/Linux/Windows), batch add |
 | `intraday.go` | 1,539 | Intraday Collection | Background worker pool (max 10 concurrent), per-minute updates, intelligent worker management |
 | `api.go` | 1,355 | API Integration | Multi-source data fetching with auto fallback (Tencent, Sina, East Money) |
 | `intraday_chart.go` | 1,260 | Intraday Charts | Braille rendering, smart date selection, adaptive Y-axis, search mode support |
+| `alert_frequency.go` | 161 | Frequency Control | 5 frequency modes, efficient trigger checking, time boundary handling |
 | `watchlist.go` | 696 | Watchlist Management | Multi-tag operations, filtering, grouping, search, market tags, tag grouping |
 | `columns.go` | 492 | Column Configuration | Customizable table columns, flexible configuration |
 | `persistence.go` | 353 | Data Persistence | JSON/YAML read/write, backup restore, data migration |
-| `types.go` | 341 | Data Structures | Stock, StockData, Config, MarketType, TagGroup and other core types |
+| `types.go` | 425 | Data Structures | Stock, StockData, Config, MarketType, TagGroup, Alert, TriggerFrequency and other core types |
 | `intraday_test.go` | 328 | Intraday Tests | Market detection, collection modes, worker management, datapoint comparison tests |
+| `alert_frequency_test.go` | 419 | Alert Frequency Tests | 12 test cases covering all frequency modes, edge cases, boundary conditions |
 | `sort.go` | 238 | Sorting Engine | 11 portfolio fields + 7 watchlist fields sorting |
 | `ui_utils.go` | 194 | UI Utilities | Table formatting, Chinese width handling, pagination |
 | `timezone.go` | 172 | Timezone Handling | Multi-market timezone conversion, trading state detection |
-| `debug.go` | 160 | Debug Logging | 1000-entry buffer, scrollable viewer, conditional logging |
+| `logger.go` | 189 | Zap Logging System | Structured logging, log rotation, concurrent protection (v5.8) |
+| `log.go` | 129 | Logging Interface | Four log levels, text formatting, i18n integration (v5.8) |
 | `format.go` | 156 | Formatting | Number formatting, price display, percentage calculations |
 | `cache.go` | 127 | Price Cache | 30-second TTL, RWMutex concurrent protection |
 | `api_test.go` | 87 | API Tests | API fallback logic, code conversion, HK stock detection tests |
@@ -580,21 +595,24 @@ If you encounter issues, please provide:
 
 ## Version History
 
-### Current Version - v5.8 (January 2026)
+### Current Version - v6.0 (January 2026)
 
-**📊 Structured Logging System**
+**🔔 Stock Alert System**
 
-- **Zap Integration**: Industry-standard zap library for professional structured logging
-- **Daily Log Rotation**: Automatic daily log file rotation to prevent oversized files
-- **Four Log Levels**: DEBUG, INFO, WARN, ERROR for different logging scenarios
-- **I18n Support**: Log messages integrated with internationalization system
-- **File-based Persistence**: Permanent log storage for troubleshooting and analysis
-- **Full Backward Compatibility**: Fully compatible with v5.7 and earlier versions
+- **3 Alert Types**: Price alerts, change percent alerts, volume alerts (A-shares)
+- **5 Trigger Frequencies**: Once, daily, weekly, monthly, custom interval
+- **3 Batch Add Methods**: By tags, by market, CSV import
+- **Cross-Platform Notifications**: macOS, Linux, Windows native notifications
+- **11 New UI States**: Complete alert management interface
+- **Frequency Control Algorithm**: O(1) efficient trigger checking
+- **12 Comprehensive Tests**: Full coverage of all frequency modes and edge cases
+- **Full Backward Compatibility**: Fully compatible with v5.8 data
 
 ### Version History
 
 | Version | Release Date | Major Updates | Documentation |
 |---------|--------------|-----------------|----------------|
+| **v6.0** | Jan 2026 | 🔔 Stock alert system, frequency control, batch operations, cross-platform notifications | [Details](doc/changelogs/v6.0.md) |
 | **v5.8** | Jan 2026 | 📊 Structured logging system, zap integration, log rotation, i18n support | [Details](doc/changelogs/v5.8.md) |
 | v5.7 | Dec 2025 | 🏷️ Watchlist tag grouping system, position memory, boundary stop | [Details](doc/changelogs/v5.7.md) |
 | v5.6 | Dec 2025 | 🔍 Search view enhancement, real-time intraday charts, auto-refresh | [Details](doc/changelogs/v5.6.md) |
