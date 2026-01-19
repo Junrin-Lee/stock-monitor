@@ -3,7 +3,113 @@ package main
 import (
 	"sync"
 	"time"
+
+	"stock-monitor/internal/consts"
+	"stock-monitor/internal/types"
 )
+
+// 为了向后兼容，重新导出 internal/types 包中的类型
+// 注意：对于需要添加方法的类型，我们使用独立定义而非别名
+
+type (
+	// 数据配置类型 - 使用别名（无需添加方法）
+	Config = types.Config
+	SystemConfig             = types.SystemConfig
+	DisplayConfig            = types.DisplayConfig
+	UpdateConfig             = types.UpdateConfig
+	TradingSession           = types.TradingSession
+	MarketConfig             = types.MarketConfig
+	MarketsConfig            = types.MarketsConfig
+	IntradayCollectionConfig = types.IntradayCollectionConfig
+	TextMap                  = types.TextMap
+	TimePoint                = types.TimePoint
+	WorkerMetadata           = types.WorkerMetadata
+)
+
+// 重新导出 internal/consts 包中的类型
+type (
+	Language      = consts.Language
+	AppState      = consts.AppState
+	SortField     = consts.SortField
+	SortDirection = consts.SortDirection
+)
+
+// MarketType 市场类型枚举（需要和 types 包中保持一致）
+type MarketType = types.MarketType
+
+// 重新导出 MarketType 常量
+const (
+	MarketChina    = types.MarketChina
+	MarketUS       = types.MarketUS
+	MarketHongKong = types.MarketHongKong
+)
+
+// AlertType 告警类型
+type AlertType = types.AlertType
+
+// TriggerFrequency 触发频率类型
+type TriggerFrequency = types.TriggerFrequency
+
+// 重新导出告警相关常量
+const (
+	AlertTypePrice  = types.AlertTypePrice
+	AlertTypeRate   = types.AlertTypeRate
+	AlertTypeVolume = types.AlertTypeVolume
+
+	TriggerOnce       = types.TriggerOnce
+	TriggerDaily      = types.TriggerDaily
+	TriggerWeekly     = types.TriggerWeekly
+	TriggerMonthly    = types.TriggerMonthly
+	TriggerEveryNDays = types.TriggerEveryNDays
+)
+
+// BatchStockSource 批量股票来源类型
+type BatchStockSource = types.BatchStockSource
+
+// 重新导出 BatchStockSource 常量
+const (
+	BatchSourceWatchlist = types.BatchSourceWatchlist
+	BatchSourcePortfolio = types.BatchSourcePortfolio
+	BatchSourceManual    = types.BatchSourceManual
+)
+
+// CollectionMode 数据采集模式
+type CollectionMode = types.CollectionMode
+
+// 重新导出 CollectionMode 常量
+const (
+	CollectionModeHistorical = types.CollectionModeHistorical
+	CollectionModeLive       = types.CollectionModeLive
+	CollectionModeComplete   = types.CollectionModeComplete
+)
+
+// TradingState 交易状态
+type TradingState = types.TradingState
+
+// 重新导出 TradingState 常量
+const (
+	TradingStatePreMarket  = types.TradingStatePreMarket
+	TradingStateLive       = types.TradingStateLive
+	TradingStatePostMarket = types.TradingStatePostMarket
+	TradingStateWeekend    = types.TradingStateWeekend
+	TradingStateHoliday    = types.TradingStateHoliday
+)
+
+// 重新导出变量和函数
+var AlertConditions = types.AlertConditions
+
+// 辅助函数重新导出
+var (
+	GetAlertTypeFromCursor      = types.GetAlertTypeFromCursor
+	GetAlertConditionFromCursor = types.GetAlertConditionFromCursor
+	CheckNumericCondition       = types.CheckNumericCondition
+	MoveCursorUp                = types.MoveCursorUp
+	MoveCursorDown              = types.MoveCursorDown
+)
+
+// ============================================================================
+// 需要添加方法的类型 - 在 main 包中独立定义
+// ============================================================================
 
 // Stock 持仓股票数据结构
 type Stock struct {
@@ -35,18 +141,6 @@ type StockData struct {
 	Volume        int64   `json:"volume"`
 }
 
-// Portfolio 持仓组合
-type Portfolio struct {
-	Stocks []Stock `json:"stocks"`
-}
-
-// StockPriceCacheEntry 股价缓存条目结构
-type StockPriceCacheEntry struct {
-	Data       *StockData `json:"data"`        // 股价数据
-	UpdateTime time.Time  `json:"update_time"` // 数据更新时间
-	IsUpdating bool       `json:"is_updating"` // 是否正在更新中
-}
-
 // WatchlistStock 自选股票数据结构
 type WatchlistStock struct {
 	Code   string     `json:"code"`
@@ -60,71 +154,47 @@ type Watchlist struct {
 	Stocks []WatchlistStock `json:"stocks"`
 }
 
-// MarketType 市场类型枚举
-type MarketType string
-
-const (
-	MarketChina    MarketType = "china"
-	MarketUS       MarketType = "us"
-	MarketHongKong MarketType = "hongkong"
-)
-
-// TradingSession 交易时段
-type TradingSession struct {
-	StartTime string `yaml:"start_time"` // "09:30"
-	EndTime   string `yaml:"end_time"`   // "11:30"
+// TagGroup 标签分组结构 (v5.6)
+type TagGroup struct {
+	Name string   // 分组名称 (如 "市场分组", "自定义标签")
+	Tags []string // 该分组下的标签列表
 }
 
-// MarketConfig 市场配置
-type MarketConfig struct {
-	Timezone        string           `yaml:"timezone"`         // "Asia/Shanghai"
-	TradingSessions []TradingSession `yaml:"trading_sessions"` // 交易时段列表
-	Weekdays        []int            `yaml:"weekdays"`         // [1,2,3,4,5] (周一到周五)
+// Portfolio 持仓组合
+type Portfolio struct {
+	Stocks []Stock `json:"stocks"`
 }
 
-// MarketsConfig 所有市场配置
-type MarketsConfig struct {
-	China    MarketConfig `yaml:"china"`
-	US       MarketConfig `yaml:"us"`
-	HongKong MarketConfig `yaml:"hongkong"`
+// Alert 告警规则
+type Alert struct {
+	ID            string           `json:"id"`             // 唯一标识符（UUID v4）
+	StockCode     string           `json:"code"`           // 股票代码
+	StockName     string           `json:"name"`           // 股票名称
+	Type          AlertType        `json:"type"`           // 告警类型
+	Condition     string           `json:"condition"`      // 条件（">" / "<" / ">=" / "<="）
+	Threshold     float64          `json:"threshold"`      // 阈值（价格或百分比）
+	IsActive      bool             `json:"is_active"`      // 是否启用
+	Frequency     TriggerFrequency `json:"frequency"`      // 触发频率
+	FrequencyDays int              `json:"frequency_days"` // 自定义天数间隔（仅 every_n_days 模式）
+	CreatedAt     time.Time        `json:"created_at"`     // 创建时间
+	TriggeredAt   time.Time        `json:"triggered_at"`   // 最后触发时间
+	LastChecked   time.Time        `json:"last_checked"`   // 最后检查时间
+	BatchTag      string           `json:"batch_tag"`      // 批量标签名（批量添加时）
 }
 
-// Config 系统配置结构
-type Config struct {
-	System             SystemConfig             `yaml:"system"`              // 系统设置
-	Display            DisplayConfig            `yaml:"display"`             // 显示设置
-	Update             UpdateConfig             `yaml:"update"`              // 更新设置
-	Markets            MarketsConfig            `yaml:"markets"`             // 市场配置
-	IntradayCollection IntradayCollectionConfig `yaml:"intraday_collection"` // 分时数据采集配置
+// AlertData 告警配置文件
+type AlertData struct {
+	Alerts     []Alert `json:"alerts"`
+	LastCheck  string  `json:"last_check"`
+	AlertCount int     `json:"alert_count"`
 }
 
-// SystemConfig 系统设置
-type SystemConfig struct {
-	Language      string `yaml:"language"`       // 默认语言 "zh" 或 "en"
-	AutoStart     bool   `yaml:"auto_start"`     // 有数据时自动进入监控模式
-	StartupModule string `yaml:"startup_module"` // 启动模块 "portfolio"(持股) 或 "watchlist"(自选)
-	LogLevel      string `yaml:"log_level"`      // 日志级别 "debug", "info", "warn", "error"
+// StockPriceCacheEntry 股价缓存条目结构
+type StockPriceCacheEntry struct {
+	Data       *StockData `json:"data"`        // 股价数据
+	UpdateTime time.Time  `json:"update_time"` // 数据更新时间
+	IsUpdating bool       `json:"is_updating"` // 是否正在更新中
 }
-
-// DisplayConfig 显示设置
-type DisplayConfig struct {
-	ColorScheme        string   `yaml:"color_scheme"`        // 颜色方案 "professional", "simple"
-	DecimalPlaces      int      `yaml:"decimal_places"`      // 价格显示小数位数
-	TableStyle         string   `yaml:"table_style"`         // 表格样式 "light", "bold", "simple"
-	MaxLines           int      `yaml:"max_lines"`           // 列表每页最大显示行数
-	PortfolioHighlight string   `yaml:"portfolio_highlight"` // 自选列表中持仓股票的背景高亮颜色
-	PortfolioColumns   []string `yaml:"portfolio_columns"`   // 持股列表显示的列（按顺序）
-	WatchlistColumns   []string `yaml:"watchlist_columns"`   // 自选列表显示的列（按顺序）
-}
-
-// UpdateConfig 更新设置
-type UpdateConfig struct {
-	RefreshInterval int  `yaml:"refresh_interval"` // 刷新间隔（秒）
-	AutoUpdate      bool `yaml:"auto_update"`      // 是否自动更新
-}
-
-// TextMap 文本映射结构（用于i18n）
-type TextMap map[string]string
 
 // Model 应用程序主模型
 type Model struct {
@@ -281,212 +351,3 @@ type checkDataAvailabilityMsg struct {
 
 // searchIntradayUpdateMsg 搜索模式分时数据更新消息
 type searchIntradayUpdateMsg struct{}
-
-// TimePoint 图表时间点数据
-type TimePoint struct {
-	Time  time.Time
-	Value float64
-}
-
-// CollectionMode 数据采集模式
-type CollectionMode int
-
-const (
-	CollectionModeHistorical CollectionMode = iota // 采集历史交易日数据
-	CollectionModeLive                             // 采集当日实时数据
-	CollectionModeComplete                         // 数据已完整，无需采集
-)
-
-// String returns the string representation of CollectionMode
-func (c CollectionMode) String() string {
-	switch c {
-	case CollectionModeHistorical:
-		return "Historical"
-	case CollectionModeLive:
-		return "Live"
-	case CollectionModeComplete:
-		return "Complete"
-	default:
-		return "Unknown"
-	}
-}
-
-// TradingState 交易状态
-type TradingState int
-
-const (
-	TradingStatePreMarket  TradingState = iota // 盘前（开盘前）
-	TradingStateLive                           // 交易中
-	TradingStatePostMarket                     // 盘后（收盘后，当日）
-	TradingStateWeekend                        // 周末
-	TradingStateHoliday                        // 假日
-)
-
-// String returns the string representation of TradingState
-func (t TradingState) String() string {
-	switch t {
-	case TradingStatePreMarket:
-		return "PreMarket"
-	case TradingStateLive:
-		return "Live"
-	case TradingStatePostMarket:
-		return "PostMarket"
-	case TradingStateWeekend:
-		return "Weekend"
-	case TradingStateHoliday:
-		return "Holiday"
-	default:
-		return "Unknown"
-	}
-}
-
-// WorkerMetadata Worker状态元数据
-type WorkerMetadata struct {
-	StockCode         string         // 股票代码
-	TargetDate        string         // 目标日期 (YYYYMMDD)
-	Mode              CollectionMode // 采集模式
-	StartTime         time.Time      // Worker启动时间
-	LastUpdateTime    time.Time      // 最后更新时间
-	DatapointCount    int            // 已采集数据点数量
-	ConsecutiveErrors int            // 连续错误次数
-	ConsecutiveSkips  int            // 连续跳过次数（数据完全一致）
-	IsRunning         bool           // 是否正在运行
-}
-
-// IntradayCollectionConfig 分时数据采集配置
-type IntradayCollectionConfig struct {
-	EnableAutoStop        bool    `yaml:"enable_auto_stop"`       // 启用自动停止
-	CompletenessThreshold float64 `yaml:"completeness_threshold"` // 完整性阈值 (百分比)
-	MaxConsecutiveErrors  int     `yaml:"max_consecutive_errors"` // 最大连续错误次数
-	MinDatapoints         int     `yaml:"min_datapoints"`         // 最小数据点数量
-}
-
-// TagGroup 标签分组结构 (v5.6)
-type TagGroup struct {
-	Name string   // 分组名称 (如 "市场分组", "自定义标签")
-	Tags []string // 该分组下的标签列表
-}
-
-// AlertType 告警类型
-type AlertType string
-
-const (
-	AlertTypePrice  AlertType = "price"  // 价格告警
-	AlertTypeRate   AlertType = "rate"   // 涨跌幅告警
-	AlertTypeVolume AlertType = "volume" // 成交量告警
-)
-
-// TriggerFrequency 触发频率类型
-type TriggerFrequency string
-
-const (
-	TriggerOnce       TriggerFrequency = "once"         // 一次性
-	TriggerDaily      TriggerFrequency = "daily"        // 每天一次
-	TriggerWeekly     TriggerFrequency = "weekly"       // 每周一次
-	TriggerMonthly    TriggerFrequency = "monthly"      // 每月一次
-	TriggerEveryNDays TriggerFrequency = "every_n_days" // 每 N 天一次
-)
-
-// Alert 告警规则
-type Alert struct {
-	ID            string           `json:"id"`             // 唯一标识符（UUID v4）
-	StockCode     string           `json:"code"`           // 股票代码
-	StockName     string           `json:"name"`           // 股票名称
-	Type          AlertType        `json:"type"`           // 告警类型
-	Condition     string           `json:"condition"`      // 条件（">" / "<" / ">=" / "<="）
-	Threshold     float64          `json:"threshold"`      // 阈值（价格或百分比）
-	IsActive      bool             `json:"is_active"`      // 是否启用
-	Frequency     TriggerFrequency `json:"frequency"`      // 触发频率
-	FrequencyDays int              `json:"frequency_days"` // 自定义天数间隔（仅 every_n_days 模式）
-	CreatedAt     time.Time        `json:"created_at"`     // 创建时间
-	TriggeredAt   time.Time        `json:"triggered_at"`   // 最后触发时间
-	LastChecked   time.Time        `json:"last_checked"`   // 最后检查时间
-	BatchTag      string           `json:"batch_tag"`      // 批量标签名（批量添加时）
-}
-
-// AlertData 告警配置文件
-type AlertData struct {
-	Alerts     []Alert `json:"alerts"`
-	LastCheck  string  `json:"last_check"`
-	AlertCount int     `json:"alert_count"`
-}
-
-// BatchStockSource 批量股票来源类型
-type BatchStockSource int
-
-const (
-	BatchSourceWatchlist BatchStockSource = iota // 从自选列表
-	BatchSourcePortfolio                         // 从持股列表
-	BatchSourceManual                            // 手动输入
-)
-
-// ============================================================================
-// 辅助函数 - Helper Functions
-// ============================================================================
-
-// AlertConditions 支持的警报条件列表
-var AlertConditions = []string{">", "<", ">=", "<="}
-
-// GetAlertTypeFromCursor 根据光标位置返回警报类型
-func GetAlertTypeFromCursor(cursor int) AlertType {
-	types := []AlertType{AlertTypePrice, AlertTypeRate, AlertTypeVolume}
-	if cursor >= 0 && cursor < len(types) {
-		return types[cursor]
-	}
-	return AlertTypePrice // 默认返回价格警报
-}
-
-// GetAlertConditionFromCursor 根据光标位置返回条件符号
-func GetAlertConditionFromCursor(cursor int) string {
-	if cursor >= 0 && cursor < len(AlertConditions) {
-		return AlertConditions[cursor]
-	}
-	return ">" // 默认返回大于
-}
-
-// CheckNumericCondition 检查数值是否满足条件
-// 参数:
-//   - value: 当前值
-//   - threshold: 阈值
-//   - condition: 条件符号 (">", "<", ">=", "<=")
-//
-// 返回: 是否满足条件
-func CheckNumericCondition(value, threshold float64, condition string) bool {
-	switch condition {
-	case ">":
-		return value > threshold
-	case "<":
-		return value < threshold
-	case ">=":
-		return value >= threshold
-	case "<=":
-		return value <= threshold
-	default:
-		return false
-	}
-}
-
-// MoveCursorUp 处理光标上移
-// 参数:
-//   - current: 当前光标位置
-//
-// 返回: 新的光标位置
-func MoveCursorUp(current int) int {
-	if current > 0 {
-		return current - 1
-	}
-	return current
-}
-
-// MoveCursorDown 处理光标下移
-// 参数:
-//   - current: 当前光标位置
-//   - maxIndex: 最大索引(列表长度-1)
-//
-// 返回: 新的光标位置
-func MoveCursorDown(current, maxIndex int) int {
-	if current < maxIndex {
-		return current + 1
-	}
-	return current
-}

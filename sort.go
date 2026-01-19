@@ -1,174 +1,34 @@
 package main
 
 import (
-	"sort"
-	"strings"
+	internalSort "stock-monitor/internal/sort"
+	"stock-monitor/internal/types"
 )
 
-// StockSorter 股票排序接口
-type StockSorter interface {
-	SortPortfolio(stocks []Stock, field SortField, direction SortDirection)
-	SortWatchlist(stocks []WatchlistStock, stockCache map[string]*StockPriceCacheEntry, field SortField, direction SortDirection)
-}
+// StockSorter 股票排序接口 - 重新导出
+type StockSorter = internalSort.StockSorter
 
-// DefaultSorter 默认排序实现（使用Go标准库的sort包）
-type DefaultSorter struct{}
+// DefaultSorter 默认排序实现 - 重新导出
+type DefaultSorter = internalSort.DefaultSorter
 
 // NewDefaultSorter 创建默认排序器
 func NewDefaultSorter() *DefaultSorter {
-	return &DefaultSorter{}
-}
-
-// SortPortfolio 排序持股列表
-func (s *DefaultSorter) SortPortfolio(stocks []Stock, field SortField, direction SortDirection) {
-	sort.Slice(stocks, func(i, j int) bool {
-		var result bool
-
-		switch field {
-		case SortByCode:
-			result = stocks[i].Code < stocks[j].Code
-		case SortByName:
-			result = stocks[i].Name < stocks[j].Name
-		case SortByPrice:
-			result = stocks[i].Price < stocks[j].Price
-		case SortByCostPrice:
-			result = stocks[i].CostPrice < stocks[j].CostPrice
-		case SortByChange:
-			result = stocks[i].Change < stocks[j].Change
-		case SortByChangePercent:
-			result = stocks[i].ChangePercent < stocks[j].ChangePercent
-		case SortByQuantity:
-			result = stocks[i].Quantity < stocks[j].Quantity
-		case SortByTotalProfit:
-			profitI := float64(stocks[i].Quantity) * (stocks[i].Price - stocks[i].CostPrice)
-			profitJ := float64(stocks[j].Quantity) * (stocks[j].Price - stocks[j].CostPrice)
-			result = profitI < profitJ
-		case SortByProfitRate:
-			rateI := (stocks[i].Price - stocks[i].CostPrice) / stocks[i].CostPrice * 100
-			rateJ := (stocks[j].Price - stocks[j].CostPrice) / stocks[j].CostPrice * 100
-			result = rateI < rateJ
-		case SortByMarketValue:
-			valueI := stocks[i].Price * float64(stocks[i].Quantity)
-			valueJ := stocks[j].Price * float64(stocks[j].Quantity)
-			result = valueI < valueJ
-		default:
-			result = stocks[i].Code < stocks[j].Code
-		}
-
-		if direction == SortDesc {
-			result = !result
-		}
-
-		return result
-	})
-}
-
-// SortWatchlist 排序自选列表（使用缓存的股价数据，避免API调用）
-func (s *DefaultSorter) SortWatchlist(stocks []WatchlistStock, stockCache map[string]*StockPriceCacheEntry, field SortField, direction SortDirection) {
-	sort.Slice(stocks, func(i, j int) bool {
-		var result bool
-
-		// 获取缓存的股价数据
-		stockDataI := s.getStockDataFromCache(stocks[i].Code, stockCache)
-		stockDataJ := s.getStockDataFromCache(stocks[j].Code, stockCache)
-
-		switch field {
-		case SortByCode:
-			result = stocks[i].Code < stocks[j].Code
-		case SortByName:
-			result = stocks[i].Name < stocks[j].Name
-		case SortByTag:
-			tagsI := s.getTagsDisplay(stocks[i].Tags)
-			tagsJ := s.getTagsDisplay(stocks[j].Tags)
-			result = tagsI < tagsJ
-		case SortByPrice:
-			priceI := s.getPrice(stockDataI)
-			priceJ := s.getPrice(stockDataJ)
-			result = priceI < priceJ
-		case SortByChangePercent:
-			changeI := s.getChangePercent(stockDataI)
-			changeJ := s.getChangePercent(stockDataJ)
-			result = changeI < changeJ
-		case SortByTurnoverRate:
-			turnoverI := s.getTurnoverRate(stockDataI)
-			turnoverJ := s.getTurnoverRate(stockDataJ)
-			result = turnoverI < turnoverJ
-		case SortByVolume:
-			volumeI := s.getVolume(stockDataI)
-			volumeJ := s.getVolume(stockDataJ)
-			result = volumeI < volumeJ
-		default:
-			result = stocks[i].Code < stocks[j].Code
-		}
-
-		if direction == SortDesc {
-			result = !result
-		}
-
-		return result
-	})
-}
-
-// 辅助函数：从缓存获取股价数据
-func (s *DefaultSorter) getStockDataFromCache(code string, stockCache map[string]*StockPriceCacheEntry) *StockData {
-	if entry, exists := stockCache[code]; exists && entry.Data != nil {
-		return entry.Data
-	}
-	return nil
-}
-
-// 辅助函数：获取价格
-func (s *DefaultSorter) getPrice(data *StockData) float64 {
-	if data != nil {
-		return data.Price
-	}
-	return 0
-}
-
-// 辅助函数：获取涨跌幅
-func (s *DefaultSorter) getChangePercent(data *StockData) float64 {
-	if data != nil {
-		return data.ChangePercent
-	}
-	return 0
-}
-
-// 辅助函数：获取换手率
-func (s *DefaultSorter) getTurnoverRate(data *StockData) float64 {
-	if data != nil {
-		return data.TurnoverRate
-	}
-	return 0
-}
-
-// 辅助函数：获取成交量
-func (s *DefaultSorter) getVolume(data *StockData) int64 {
-	if data != nil {
-		return data.Volume
-	}
-	return 0
-}
-
-// 辅助函数：获取标签显示文本
-func (s *DefaultSorter) getTagsDisplay(tags []string) string {
-	var validTags []string
-	for _, tag := range tags {
-		if tag != "" && tag != "-" {
-			validTags = append(validTags, tag)
-		}
-	}
-
-	if len(validTags) == 0 {
-		return "-"
-	}
-
-	return strings.Join(validTags, ",")
+	return internalSort.NewDefaultSorter()
 }
 
 // 性能优化的排序函数，供Model调用
 func (m *Model) optimizedSortPortfolio(field SortField, direction SortDirection) {
 	sorter := NewDefaultSorter()
-	sorter.SortPortfolio(m.portfolio.Stocks, field, direction)
+	// 需要转换类型
+	stocks := make([]types.Stock, len(m.portfolio.Stocks))
+	for i, s := range m.portfolio.Stocks {
+		stocks[i] = types.Stock(s)
+	}
+	sorter.SortPortfolio(stocks, field, direction)
+	// 转换回来
+	for i, s := range stocks {
+		m.portfolio.Stocks[i] = Stock(s)
+	}
 }
 
 // updatePortfolioPricesFromCache 从缓存更新持股列表的价格数据
@@ -196,16 +56,57 @@ func (m *Model) optimizedSortWatchlist(field SortField, direction SortDirection)
 	// 使用高效排序（基于缓存数据，避免API调用）
 	sorter := NewDefaultSorter()
 
-	// 读取股价缓存
+	// 读取股价缓存并转换类型
 	m.stockPriceMutex.RLock()
-	stockCacheCopy := make(map[string]*StockPriceCacheEntry)
+	stockCacheCopy := make(map[string]*types.StockPriceCacheEntry)
 	for k, v := range m.stockPriceCache {
-		stockCacheCopy[k] = v
+		// 类型转换
+		entry := &types.StockPriceCacheEntry{
+			UpdateTime: v.UpdateTime,
+			IsUpdating: v.IsUpdating,
+		}
+		if v.Data != nil {
+			entry.Data = &types.StockData{
+				Symbol:        v.Data.Symbol,
+				Name:          v.Data.Name,
+				Price:         v.Data.Price,
+				Change:        v.Data.Change,
+				ChangePercent: v.Data.ChangePercent,
+				StartPrice:    v.Data.StartPrice,
+				MaxPrice:      v.Data.MaxPrice,
+				MinPrice:      v.Data.MinPrice,
+				PrevClose:     v.Data.PrevClose,
+				TurnoverRate:  v.Data.TurnoverRate,
+				Volume:        v.Data.Volume,
+			}
+		}
+		stockCacheCopy[k] = entry
 	}
 	m.stockPriceMutex.RUnlock()
 
+	// 转换 filteredStocks 到 types.WatchlistStock
+	typesStocks := make([]types.WatchlistStock, len(filteredStocks))
+	for i, s := range filteredStocks {
+		typesStocks[i] = types.WatchlistStock{
+			Code:   s.Code,
+			Name:   s.Name,
+			Tags:   s.Tags,
+			Market: types.MarketType(s.Market),
+		}
+	}
+
 	// 执行排序（使用缓存数据）
-	sorter.SortWatchlist(filteredStocks, stockCacheCopy, field, direction)
+	sorter.SortWatchlist(typesStocks, stockCacheCopy, field, direction)
+
+	// 转换回来
+	for i, s := range typesStocks {
+		filteredStocks[i] = WatchlistStock{
+			Code:   s.Code,
+			Name:   s.Name,
+			Tags:   s.Tags,
+			Market: MarketType(s.Market),
+		}
+	}
 
 	// 将排序后的过滤列表更新回原列表
 	// 如果没有过滤，直接使用排序结果
