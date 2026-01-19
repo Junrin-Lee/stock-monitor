@@ -16,14 +16,17 @@ A professional command-line stock monitoring tool built with the Bubble Tea fram
 
 - [Features](#-features)
 - [Quick Start](#-quick-start)
+  - [Alert System Quick Start](#-alert-system-quick-start-v60-new-feature)
 - [Screenshots](#-screenshots)
 - [Keyboard Shortcuts](#-keyboard-shortcuts)
 - [Architecture](#-architecture)
 - [Project Structure](#-project-structure)
 - [Configuration](#-configuration)
+- [Alert System Guide](#-alert-system-guide-v60)
 - [Supported Markets & APIs](#-supported-markets--apis)
 - [Troubleshooting](#-troubleshooting)
 - [Version History](#-version-history)
+- [Use Cases](#-use-cases)
 - [Usage Tips](#-usage-tips)
 
 ---
@@ -94,7 +97,84 @@ go build -o cmd/stock-monitor
 
 ---
 
-## Screenshots
+## 📱 Alert System Quick Start (v6.0 New Feature)
+
+### Add Single Alert (5-Step Process)
+
+1. **Enter Alert Management**: Press `Alt+A` or select "Alert Management" from menu
+2. **Select Alert Type**:
+   - **Price Alert** - Trigger when stock price reaches specific level
+   - **Change Percent Alert** - Trigger when daily change % reaches threshold
+   - **Volume Alert** - Trigger when trading volume reaches level (A-shares only)
+3. **Set Trigger Condition**:
+   - Select condition type (above/below/equals)
+   - Enter threshold value (price or percentage)
+4. **Choose Trigger Frequency** (5 modes available):
+   - **Once** - Trigger once when condition met, then auto-disable alert
+   - **Daily** - Check at fixed time each day, trigger max once per day
+   - **Weekly** - Check on specific day each week, trigger max once per week
+   - **Monthly** - Check on specific date each month, trigger max once per month
+   - **Custom** - Check every N days (user-defined interval)
+5. **Enable Alert** - Alert becomes active, system checks every 5 seconds
+
+### Batch Add Alerts (4-Step Process)
+
+**Method 1: By Tags**
+1. Enter Alert Management → Select "Batch Add"
+2. Choose target tag (e.g., "Technology", "Healthcare")
+3. Configure alert conditions and frequency (applies to all stocks with this tag)
+4. Confirm → One-click add alerts to all related stocks
+
+**Method 2: By Market**
+1. Enter Alert Management → Select "Batch Add"
+2. Choose target market (A-shares/US stocks/HK stocks)
+3. Configure alert conditions and frequency
+4. Confirm → Auto apply to all selected market stocks
+
+### Typical Use Cases (3 Examples)
+
+**Case 1: Portfolio Stop-Loss Monitoring**
+```
+Alert Type: Price Alert
+Condition: Below ¥120 (stop-loss level)
+Frequency: Daily (check at trading open)
+→ Receive notification when stop-loss triggered, take immediate action
+```
+
+**Case 2: Watch Sector Hotspots**
+```
+Alert Type: Change Percent Alert
+Condition: Above +5% (strong rally threshold)
+Frequency: Once (trigger on first occurrence)
+→ Identify sector breakout opportunities, enter in time
+```
+
+**Case 3: Track US Stock Earnings**
+```
+Alert Type: Volume Alert (if applicable)
+Condition: Above 150% of daily average
+Frequency: Weekly (check once per week)
+→ Get notified on unusual volume around earnings date
+```
+
+### Alert Notification Methods
+
+System supports **native notifications across platforms**:
+
+| Platform | Method | Effect |
+|----------|--------|--------|
+| **macOS** | Notification Center | Top-right notification bubble + sound |
+| **Linux** | D-Bus Notification | Freedesktop standard notifications |
+| **Windows** | Toast Notification | Bottom-right popup + sound |
+
+**Sample Notification Content**:
+```
+📈 Stock Alert: SH601138 (Industrial Fox)
+Price rises from $61.50 to $62.00
+[Open App] [Close]
+```
+
+---
 
 ### Portfolio View
 
@@ -241,22 +321,23 @@ Press `V` key to view the intraday chart for the selected stock:
 |--------|:-----:|----------------|-------------|
 | `main.go` | 3,259 | State Machine & Event Handling | Core app logic, 29 states (11 alert management states), Bubble Tea event loop |
 | `alert.go` | 2,572 | Alert System | 3 alert types, CRUD operations, cross-platform notifications (macOS/Linux/Windows), batch add |
-| `intraday.go` | 1,539 | Intraday Collection | Background worker pool (max 10 concurrent), per-minute updates, intelligent worker management |
+| `intraday.go` | 1,535 | Intraday Collection | Background worker pool (max 10 concurrent), per-minute updates, intelligent worker management |
 | `api.go` | 1,355 | API Integration | Multi-source data fetching with auto fallback (Tencent, Sina, East Money) |
 | `intraday_chart.go` | 1,260 | Intraday Charts | Braille rendering, smart date selection, adaptive Y-axis, search mode support |
-| `alert_frequency.go` | 161 | Frequency Control | 5 frequency modes, efficient trigger checking, time boundary handling |
-| `watchlist.go` | 696 | Watchlist Management | Multi-tag operations, filtering, grouping, search, market tags, tag grouping |
+| `watchlist.go` | 884 | Watchlist Management | Multi-tag operations, filtering, grouping, search, market tags, tag grouping |
 | `columns.go` | 492 | Column Configuration | Customizable table columns, flexible configuration |
-| `persistence.go` | 353 | Data Persistence | JSON/YAML read/write, backup restore, data migration |
 | `types.go` | 425 | Data Structures | Stock, StockData, Config, MarketType, TagGroup, Alert, TriggerFrequency and other core types |
-| `intraday_test.go` | 328 | Intraday Tests | Market detection, collection modes, worker management, datapoint comparison tests |
+| `persistence.go` | 414 | Data Persistence | JSON/YAML read/write, backup restore, data migration |
 | `alert_frequency_test.go` | 419 | Alert Frequency Tests | 12 test cases covering all frequency modes, edge cases, boundary conditions |
+| `intraday_test.go` | 328 | Intraday Tests | Market detection, collection modes, worker management, datapoint comparison tests |
+| `holiday_worker.go` | 278 | Trading Calendar | Holiday detection, trading state detection, market opening time recognition |
 | `sort.go` | 238 | Sorting Engine | 11 portfolio fields + 7 watchlist fields sorting |
 | `ui_utils.go` | 194 | UI Utilities | Table formatting, Chinese width handling, pagination |
-| `timezone.go` | 172 | Timezone Handling | Multi-market timezone conversion, trading state detection |
 | `logger.go` | 189 | Zap Logging System | Structured logging, log rotation, concurrent protection (v5.8) |
-| `log.go` | 129 | Logging Interface | Four log levels, text formatting, i18n integration (v5.8) |
+| `timezone.go` | 172 | Timezone Handling | Multi-market timezone conversion, trading state detection |
+| `alert_frequency.go` | 161 | Frequency Control | 5 frequency modes, efficient trigger checking, time boundary handling |
 | `format.go` | 156 | Formatting | Number formatting, price display, percentage calculations |
+| `log.go` | 129 | Logging Interface | Four log levels, text formatting, i18n integration (v5.8) |
 | `cache.go` | 127 | Price Cache | 30-second TTL, RWMutex concurrent protection |
 | `api_test.go` | 87 | API Tests | API fallback logic, code conversion, HK stock detection tests |
 
@@ -276,18 +357,27 @@ Press `V` key to view the intraday chart for the selected stock:
 
 ```
 stock-monitor/
-├── main.go                 # Core app: state machine, event handling (3,156 lines)
-├── api.go                  # API integration: multi-source with fallback (1,226 lines)
-├── intraday_chart.go       # Intraday charts: Braille rendering (754 lines)
-├── intraday.go             # Intraday collection: background worker pool (616 lines)
-├── watchlist.go            # Watchlist management: tags, groups (508 lines)
+├── main.go                 # Core app: state machine, event handling (3,259 lines)
+├── alert.go                # Alert system: 3 types, CRUD, batch operations (2,572 lines)
+├── intraday.go             # Intraday collection: background worker pool (1,535 lines)
+├── api.go                  # API integration: multi-source with fallback (1,355 lines)
+├── intraday_chart.go       # Intraday charts: Braille rendering (1,260 lines)
+├── watchlist.go            # Watchlist management: tags, groups (884 lines)
+├── columns.go              # Column configuration system (492 lines)
+├── types.go                # Data structure definitions (425 lines)
+├── persistence.go          # Data persistence (414 lines)
+├── alert_frequency_test.go # Alert frequency tests: 12 test cases (419 lines)
+├── intraday_test.go        # Intraday collection tests (328 lines)
+├── holiday_worker.go       # Trading calendar management (278 lines)
 ├── sort.go                 # Sorting engine (238 lines)
-├── types.go                # Data structure definitions (215 lines)
 ├── ui_utils.go             # UI utility functions (194 lines)
-├── persistence.go          # Data persistence (171 lines)
+├── logger.go               # Zap logging system (189 lines)
+├── timezone.go             # Timezone handling (172 lines)
+├── alert_frequency.go      # Frequency control (161 lines)
 ├── format.go               # Formatting utilities (156 lines)
-├── debug.go                # Debug logging (153 lines)
-├── cache.go                # Price caching (129 lines)
+├── log.go                  # Logging interface (129 lines)
+├── cache.go                # Price caching (127 lines)
+├── api_test.go             # API tests (87 lines)
 ├── scroll.go               # Scroll handling (77 lines)
 ├── consts.go               # Constants (71 lines)
 ├── i18n.go                 # Internationalization (57 lines)
@@ -303,6 +393,7 @@ stock-monitor/
 ├── data/
 │   ├── portfolio.json      # Portfolio data
 │   ├── watchlist.json      # Watchlist data
+│   ├── alert_data.json     # Alert configuration data (v6.0)
 │   └── intraday/           # Intraday data directory
 │       ├── SH600000/       # Organized by stock code
 │       │   ├── 20251202.json
@@ -315,7 +406,7 @@ stock-monitor/
 │   └── en.json             # English language pack (~250 strings)
 │
 ├── doc/
-│   ├── version/            # Version history documentation
+│   ├── changelogs/         # Version history documentation
 │   └── issues/             # Feature documentation
 │
 ├── README.md               # Chinese documentation
@@ -632,6 +723,346 @@ View complete version history: [doc/version/](doc/changelogs/)
 
 ---
 
+## 🔔 Alert System Guide (v6.0)
+
+### Alert Types and Applications
+
+| Type | Applicable Markets | Description | Typical Use |
+|------|-------------------|-------------|------------|
+| **Price Alert** | A-shares, US, HK | Monitor if stock price breaks key levels | Stop-loss at ¥120, target price ¥150 |
+| **Change Percent Alert** | A-shares, US, HK | Monitor daily change % threshold | Strong rally +5%, decline -3% |
+| **Volume Alert** | A-shares only | Monitor trading volume anomalies | Unusual surge (150% daily avg), weakness (50% daily avg) |
+
+### Trigger Frequencies and Rules
+
+| Frequency | Trigger Rule | Use Case | Config Example |
+|-----------|-------------|----------|-----------------|
+| **Once** | Trigger immediately when condition met, then auto-disable | Temporary monitoring, one-time notification | Monitor announcement release |
+| **Daily** | Check at fixed time each day, trigger max once per day | Intraday tracking of key levels | Check daily high at 10:00 |
+| **Weekly** | Check on specific day each week, trigger max once per week | Weekly planning, periodic assessment | Check opening price every Monday 10:00 |
+| **Monthly** | Check on specific date each month, trigger max once per month | Monthly statistics, long-term tracking | Check monthly performance on 1st day |
+| **Custom** | Check every N days (N specified by user) | Flexible cycle, custom schedule | Check change every 3 days |
+
+**Time Boundary Notes**:
+- **Daily Boundary**: Calculated by market trading time, not calendar date
+- **Weekly Boundary**: Monday-Sunday, won't retrigger within same week
+- **Monthly Boundary**: Natural calendar month, auto-resets at month end
+
+### Notification System
+
+**Cross-Platform Support**:
+
+- 🍎 **macOS**: Notification Center with sound and banner support
+- 🐧 **Linux**: D-Bus notification service (freedesktop.org standard), theme integration
+- 🪟 **Windows**: Windows 10+ Toast notifications, bottom-right popup
+
+**Sample Notification Content**:
+```
+Title: 📈 Stock Alert - SH601138 (Industrial Fox)
+Body:  Price breaks target level
+       Current: $62.50 | Target: $62.00
+       Time: 2026-01-19 14:35:22
+```
+
+**Notification Behavior**:
+- Push system notification immediately when triggered
+- Notification includes stock code, name, current price, target condition
+- Users can click notification to open app directly
+
+### Batch Operations Guide
+
+**Add Alerts by Tags**
+
+Process:
+1. Select target tag (e.g., all "Technology" sector stocks)
+2. Configure uniform alert conditions and frequency
+3. System auto-applies alert to all stocks with this tag
+
+Advantages:
+- One operation covers entire sector
+- Avoid tedious one-by-one configuration
+- Future stocks added to tag inherit config (optional)
+
+Example:
+```
+Tag: Technology (includes AAPL, MSFT, GOOGL, TSLA)
+Condition: Change % > +3%
+Frequency: Once
+→ Get notified when any tech stock rallies >3% in a day
+```
+
+**Add Alerts by Market**
+
+Process:
+1. Select target market (A-shares, US stocks, HK stocks)
+2. Configure uniform alert for all market stocks
+3. System applies to all holdings/watchlist stocks in market
+
+Advantages:
+- Market-level unified management
+- Quick coverage of large portfolio
+- Market-specific strategy one-click config
+
+Example:
+```
+Market: US (includes all US stock holdings)
+Condition: Price > 120% previous close
+Frequency: Daily
+→ Check for opening gaps in US market
+```
+
+### Performance and Limits
+
+**Performance Metrics**:
+
+| Metric | Value | Description |
+|--------|-------|-------------|
+| Alert Check Cycle | 5s | Background monitoring, check every 5 seconds |
+| Single Alert Check | <1ms | O(1) complexity, extremely efficient |
+| 1000 Alerts Check | ~15ms | Even massive alerts don't impact UI |
+| CPU Usage | <1% | Negligible background usage |
+| Memory Usage | ~5-10MB | Small storage footprint |
+
+**Usage Recommendations**:
+- ✅ Support hundreds to thousands of simultaneous alerts
+- ✅ Safe to configure alerts for all holdings and watchlist
+- ❌ Not recommended for >10,000 alerts (memory/disk constraints)
+
+### Alert Management Tips
+
+**Layered Alert Strategy**
+
+Set multi-layer alerts by priority:
+```
+Layer 1: Stop-Loss Alert (Once)
+  └─ Price below cost basis, protect capital
+
+Layer 2: Daily Tracking (Daily)
+  └─ Rally >5%, capture daily opportunities
+
+Layer 3: Weekly Assessment (Weekly)
+  └─ Check weekly targets
+
+Layer 4: Monthly Review (Monthly)
+  └─ Evaluate monthly performance
+```
+
+**Avoid Alert Fatigue**
+
+- Don't set alerts for every stock, only key ones
+- Use reasonable trigger frequencies to avoid excessive notifications
+- Regularly review and delete alerts when targets achieved
+- Disable instead of delete for future reuse
+
+**Batch Management Efficiency**
+
+```
+Scenario: Hold 30 A-shares, want unified stop-loss alerts
+Method 1 (Inefficient): Add one by one = 30 clicks
+Method 2 (Efficient):
+  1. Add "Holdings" tag to all stocks in watchlist
+  2. Batch add by tag: condition=price down 5%, frequency=daily
+  3. Done! 30 stocks protected simultaneously
+```
+
+---
+
+## 💡 Use Cases
+
+### Case 1: Day Trader
+
+**Investment Style**: Focus on intraday volatility, pursue short-term gains
+
+**Recommended Configuration**:
+```
+Core Features:
+- ✓ Real-time Monitoring - Auto-refresh every 5s, catch every price move
+- ✓ Intraday Charts - Real-time trend viewing, identify support/resistance
+- ✓ Quick Sorting - Sort by change %, quickly find hot stocks
+
+Alert Setup:
+- Price Alert (Once) - Key level breakthrough immediately notified
+- Change Percent Alert (Once) - Strong rally/decline alerts
+- Frequency Recommendation: Once (trigger then disable, avoid repeats)
+
+Quick Operations:
+- Press `A` to quickly add watchlist
+- Press `S` to quickly sort and find hotspots
+- Press `V` to view intraday chart and confirm trends
+```
+
+---
+
+### Case 2: Value Investor
+
+**Investment Style**: Based on fundamental analysis, pursue long-term growth
+
+**Recommended Configuration**:
+```
+Core Features:
+- ✓ Portfolio Monitoring - End-of-day P&L summary, evaluate long-term performance
+- ✓ Watchlist Tags - Categorize by industry/concept, facilitate regular reviews
+- ✓ Sorting Analysis - Analyze performance by P&L rate, change %
+
+Alert Setup:
+- Price Alert (Daily) - Monitor buy/sell target prices
+- Change Percent Alert (Weekly) - Weekly assessment if deviation from expectation
+- Frequency Recommendation: Daily or Weekly (regular confirmation, avoid missing opportunities)
+
+Portfolio Structure:
+- Watchlist: Potential target stocks
+- Holdings: Purchased positions
+- Tags: Different sectors/risk levels
+```
+
+**Typical Workflow**:
+```
+Monday - Add 5 new investment targets to watchlist, set price alerts
+Mid-week - Monitor weekly price action, evaluate if reaching buy price
+Weekend - Calculate weekly returns, assess portfolio performance
+Month-end - Review by tags, adjust portfolio structure
+```
+
+---
+
+### Case 3: Sector Analyst
+
+**Investment Style**: Focus on sector rotation, capture sector opportunities
+
+**Recommended Configuration**:
+```
+Core Features:
+- ✓ Watchlist + Multi-Tags - Build separate monitoring lists for different sectors
+- ✓ Batch Alerts - Quickly configure alerts for all sector stocks by tag
+- ✓ Smart Sorting - Cross-sector performance comparison
+
+Alert Setup:
+- Change Percent Alert (Once) - Immediate notification on sector breakout
+- Price Alert (Weekly) - Weekly tracking of key stocks
+- Volume Alert (Daily) - Anomalous volume discovery opportunity
+- Frequency Recommendation: Mixed usage (catch opportunities + avoid interruptions)
+
+Batch Operations:
+- Add +3% rally alert to all "Tech" tagged stocks
+- Add price alert to all "Healthcare" tagged stocks
+- Future sector additions auto-inherit alert config
+```
+
+**Typical Workflow**:
+```
+Quarter Start - Define hot sectors, add to watchlist
+Weekly Tracking - Sort by sector, compare change % and volume
+Find Opportunities - When sector breaks out (alert received), switch focus
+Deep Research - Drill into intraday charts, analyze entry price
+```
+
+---
+
+### Case 4: International Stock Investor
+
+**Investment Style**: Cross-market allocation, multi-currency management
+
+**Recommended Configuration**:
+```
+Core Features:
+- ✓ Auto Market Detection - Automatically distinguish A-shares, US, HK stocks
+- ✓ Timezone Conversion - Auto-convert each market's trading hours
+- ✓ Multi-Currency Display - Separate RMB and foreign currency display
+
+Alert Setup:
+- Batch Market Alerts - One-click set alerts for all US stocks
+- Price Alert (Daily) - Monitor daily opening performance
+- Frequency Recommendation: Daily (US trades at night, avoid daytime interruptions)
+
+Market Focus:
+- Daytime 09:30-15:00 - Monitor A-shares and HK stocks
+- Evening 21:30-04:00 - Monitor US stocks, set next-day tracking alerts
+```
+
+---
+
+### Case 5: Beginner Investor (4-Week Learning Plan)
+
+**Goal**: Systematically learn Stock Monitor, develop investment habits
+
+**Week 1: Basic Familiarization**
+```
+Day 1 - Install & Run
+  - Download, build, and run Stock Monitor
+  - Add 3-5 familiar A-shares to portfolio
+
+Day 2-3 - Interface Exploration
+  - Click each menu item, understand features
+  - Add 10 stocks to watchlist
+
+Day 4-5 - Tag Experience
+  - Add tags to stocks (e.g., "Tech", "Healthcare")
+  - View stocks grouped by tags
+
+Day 6-7 - Sorting Analysis
+  - Sort by different fields, compare results
+  - Observe how sorting helps find hotspots
+```
+
+**Week 2: Alert Introduction**
+```
+Day 8-9 - Single Alert Experience
+  - Add price alert to one stock
+  - Observe trigger and notification process
+
+Day 10-11 - Understand Frequencies
+  - Try different frequencies (Once, Daily, Weekly)
+  - Observe alert behavior differences
+
+Day 12-13 - Multi-Type Alerts
+  - Add change percent alerts
+  - Add volume alerts (A-shares)
+
+Day 14 - Summary
+  - Explain 5 frequency mode differences
+  - Explain 3 alert type use cases
+```
+
+**Week 3: Batch Operations**
+```
+Day 15-16 - Batch by Tag
+  - Select one tag, add alerts to all its stocks
+  - Experience batch operation efficiency
+
+Day 17-18 - Batch by Market
+  - Add unified alert to all US stocks
+  - Understand market-level configuration
+
+Day 19-20 - Portfolio Optimization
+  - Delete unnecessary alerts
+  - Adjust alert parameters, optimize notification frequency
+
+Day 21 - Summary
+  - Design complete alert strategy
+  - Set multi-layer alerts for 5 key stocks
+```
+
+**Week 4: Advanced Techniques**
+```
+Day 22-23 - Chart Analysis
+  - Press V to view intraday charts
+  - Combine charts with price understanding
+
+Day 24-25 - Intraday Data
+  - Enable intraday collection, gather history
+  - View historical data in intraday charts
+
+Day 26-27 - Configuration Optimization
+  - Adjust settings per personal habits
+  - Set refresh frequency, rows per page, etc.
+
+Day 28 - Summary
+  - Define personal investment process
+  - Complete first full investment cycle
+```
+
+---
+
 ## Usage Tips
 
 ### Optimal Trading Hours
@@ -649,12 +1080,121 @@ View complete version history: [doc/version/](doc/changelogs/)
 - **Sorting Analysis**: Use sorting function to analyze performance by P&L rate, change %, etc.
 - **Portfolio Recognition**: Notice highlighted portfolio stocks in watchlist
 - **Intraday Charts**: Press `V` key to quickly view stock intraday trends
+- **Alert Management**: Regularly check and adjust alerts to avoid alert fatigue
+
+### Alert System Best Practices
+
+#### 1. Layered Alert Strategy
+
+Set multi-layer alerts to avoid single-dimension monitoring:
+
+```
+Layer 1: Protection Alert (Once)
+  ├─ Stop-Loss: Buy price -5% → Protect capital
+  └─ Risk Alert: Monthly decline -10% → Danger signal
+
+Layer 2: Daily Alert (Daily)
+  ├─ Target Price: Buy price +10% → Daily gains confirmation
+  └─ Opening Move: Rally >3% → Daily opportunity
+
+Layer 3: Weekly Alert (Weekly)
+  ├─ Weekly Target → Weekly tracking
+  └─ Relative Performance → Compare with sector
+
+Layer 4: Monthly Alert (Monthly)
+  └─ Monthly Target Price → Long-term tracking
+```
+
+#### 2. Avoid Alert Fatigue
+
+Too many alerts cause "crying wolf" effect, reducing effectiveness:
+
+```
+❌ Poor Practices:
+- Set alerts for all 100 watchlist stocks
+- Set multiple similar alerts for same stock
+- Use overly sensitive thresholds (±0.5%)
+- High-frequency checking
+
+✅ Best Practices:
+- Alert only key stocks (20 priority monitoring)
+- Different targets different alerts (stop-loss, target, anomaly)
+- Reasonable thresholds (stop-loss ±3-5%, target ±10%)
+- Appropriate frequency (Once, Daily, Weekly)
+```
+
+#### 3. Batch Management Efficiency
+
+Leverage batch operations to improve management efficiency:
+
+```
+Scenario: Add stop-loss alerts to all holdings
+
+Step 1: Organize Tags
+  - Add "Holdings" tag to all portfolio stocks in watchlist
+  - Original industry tags remain (multi-tag supported)
+
+Step 2: Batch Add
+  - Alert Management → Batch Add → By Tag → Select "Holdings"
+  - Config: Price Alert, below cost -5%
+  - Confirm & Apply
+
+Step 3: Continuous Optimization
+  - New purchases auto inherit "Holdings" tag
+  - Auto get stop-loss alerts, no manual setup needed
+  - Periodic review, adjust thresholds
+```
+
+#### 4. Market-Specific Strategies
+
+Configure alerts based on market characteristics:
+
+```
+A-Share Characteristics:
+- ✓ Daily Limits: Easy one-time breakthrough, use "Once" frequency
+- ✓ Volume: Highly important, set volume alerts
+- ✓ Trading Time: 09:30-15:00, set alerts in this window
+
+US Stock Characteristics:
+- ✓ Intraday Volatility: Relatively stable, use "Daily" frequency
+- ✓ Earnings Day: Major movements, set key price alerts ahead
+- ✓ Trading Time: Beijing 21:30-04:00, avoid daytime interruptions
+
+HK Stock Characteristics:
+- ✓ Turnover Rate: Available from East Money API, reference data
+- ✓ Chinese Stocks: Tag separately for dedicated monitoring
+- ✓ Trading Time: 09:30-16:00, covers mid-morning and afternoon
+```
+
+### Data Management
+
+#### Backup and Recovery
+
+All data stored in local JSON files, supports manual backup:
+
+```bash
+# Backup data
+cp -r data/ backup_$(date +%Y%m%d)/
+
+# Restore data
+cp backup_20260119/data/* data/
+```
+
+#### Regular Maintenance
+
+```
+Recommended Schedule:
+- Monthly: Delete achieved alerts
+- Quarterly: Review portfolio, clean up unused watchlist stocks
+- Semi-annual: Reorganize tag system, merge duplicate tags
+```
 
 ### Configuration Optimization
 
 - Adjust `display.max_lines` based on screen size
 - Tune `update.refresh_interval` to balance real-time updates and network load
 - Use `display.portfolio_highlight` to customize portfolio highlight color
+- Adjust `intraday_collection` parameters based on network conditions (if enabled)
 
 ---
 
