@@ -1,6 +1,8 @@
 package main
 
 import (
+	"stock-monitor/internal/api"
+	"stock-monitor/internal/api/hongkong"
 	"testing"
 )
 
@@ -22,7 +24,7 @@ func TestConvertStockCodeForEastMoneyAPI(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := convertStockCodeForEastMoneyAPI(tt.input)
+		result := hongkong.ConvertStockCodeForEastMoneyAPI(tt.input)
 		if result != tt.expected {
 			t.Errorf("%s: convertStockCodeForEastMoneyAPI(%q) = %q, expected %q",
 				tt.desc, tt.input, result, tt.expected)
@@ -45,7 +47,7 @@ func TestTryEastMoneyHKTurnover(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		turnover, volume, err := tryEastMoneyHKTurnover(tc.code)
+		turnover, volume, err := hongkong.TryEastMoneyHKTurnover(tc.code)
 		if err != nil {
 			t.Errorf("tryEastMoneyHKTurnover(%s) 返回错误: %v", tc.code, err)
 			continue
@@ -78,7 +80,7 @@ func TestIsHKStock(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := isHKStock(tt.input)
+		result := api.IsHKStock(tt.input)
 		if result != tt.expected {
 			t.Errorf("%s: isHKStock(%q) = %v, expected %v",
 				tt.desc, tt.input, result, tt.expected)

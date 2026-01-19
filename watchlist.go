@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"stock-monitor/internal/api"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -496,7 +497,7 @@ func (m *Model) addToWatchlist(code, name string) bool {
 	}
 
 	// 识别市场类型
-	market := getMarketType(code)
+	market := api.GetMarketType(code)
 
 	watchStock := WatchlistStock{
 		Code:   code,

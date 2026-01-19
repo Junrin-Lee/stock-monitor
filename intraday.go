@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"stock-monitor/internal/api"
 	"strconv"
 	"strings"
 	"sync"
@@ -215,7 +216,7 @@ func isDataComplete(stockCode string, date string, marketType MarketType, isLive
 // 返回: 上一个交易日 (YYYYMMDD)
 func findPreviousTradingDay(stockCode string, currentDate string, m *Model) string {
 	// 获取市场类型和时区
-	marketType := getMarketType(stockCode)
+	marketType := api.GetMarketType(stockCode)
 	location, err := getMarketLocation(marketType)
 	if err != nil {
 		// 降级到本地时区
@@ -257,7 +258,7 @@ func findPreviousTradingDay(stockCode string, currentDate string, m *Model) stri
 //   - error: 错误（如果有）
 func GetTradingDayForCollection(stockCode string, m *Model) (string, CollectionMode, error) {
 	// 步骤 1: 检测市场类型
-	marketType := getMarketType(stockCode)
+	marketType := api.GetMarketType(stockCode)
 	if marketType == "" {
 		return "", CollectionModeComplete, fmt.Errorf("unable to detect market for stock: %s", stockCode)
 	}
@@ -458,7 +459,7 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 
 			// 条件 3: Historical 模式 + 数据完整
 			if mode == CollectionModeHistorical {
-				marketType := getMarketType(stockCode)
+				marketType := api.GetMarketType(stockCode)
 				complete, err := isDataComplete(stockCode, targetDate, marketType, false)
 				if err == nil && complete {
 					logInfoDirect("[Intraday] Worker for %s stopped: historical data complete for %s",
@@ -469,7 +470,7 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 
 			// 条件 4: Live 模式 + 市场关闭 + 数据完整
 			if mode == CollectionModeLive {
-				marketType := getMarketType(stockCode)
+				marketType := api.GetMarketType(stockCode)
 				location, _ := getMarketLocation(marketType)
 				if location != nil {
 					now := time.Now().In(location)
@@ -577,7 +578,7 @@ func (im *IntradayManager) fetchAndSaveIntradayData(stockCode, stockName string,
 		today = targetDate
 	} else {
 		// 降级逻辑：根据交易状态决定日期
-		market := getMarketType(stockCode)
+		market := api.GetMarketType(stockCode)
 		location, err := getMarketLocation(market)
 		if err != nil {
 			// 如果无法获取时区，使用市场当前日期（向后兼容）
@@ -605,7 +606,7 @@ func (im *IntradayManager) fetchAndSaveIntradayData(stockCode, stockName string,
 	}
 
 	// 获取市场类型（用于保存到数据结构）
-	market := getMarketType(stockCode)
+	market := api.GetMarketType(stockCode)
 
 	// Read existing data (if any)
 	existingData := &IntradayData{
@@ -673,7 +674,7 @@ func (im *IntradayManager) fetchAndSaveIntradayData(stockCode, stockName string,
 // fetchIntradayDataFromAPI tries all APIs in fallback order based on market type
 func fetchIntradayDataFromAPI(stockCode string) ([]IntradayDataPoint, error) {
 	var lastErr error
-	market := getMarketType(stockCode)
+	market := api.GetMarketType(stockCode)
 
 	// US stocks: Use Yahoo Finance API (best for US stocks)
 	if market == MarketUS {
@@ -1012,7 +1013,7 @@ func ensureIntradayDirectory(stockCode string) error {
 
 // getMarketDirectory returns market subdirectory (CN/HK/US) based on stock code
 func getMarketDirectory(code string) string {
-	market := getMarketType(code)
+	market := api.GetMarketType(code)
 	switch market {
 	case MarketChina:
 		return "CN"
@@ -1077,7 +1078,7 @@ func getFileLock(filePath string) *sync.Mutex {
 
 // isMarketOpen 检查当前是否在交易时间内（支持多市场）
 func isMarketOpen(stockCode string, m *Model) bool {
-	market := getMarketType(stockCode)
+	market := api.GetMarketType(stockCode)
 
 	var marketConfig MarketConfig
 	switch market {
@@ -1479,7 +1480,7 @@ func tryGetIntradayFromYahoo(stockCode string) ([]IntradayDataPoint, error) {
 
 		// Format time as "HH:MM" in local market timezone
 		// Yahoo returns timestamps in UTC, need to convert to market time
-		market := getMarketType(stockCode)
+		market := api.GetMarketType(stockCode)
 		var location *time.Location
 
 		switch market {

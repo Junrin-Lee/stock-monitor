@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"stock-monitor/internal/api"
+	"stock-monitor/internal/types"
+	"stock-monitor/internal/ui"
 	"strings"
 	"time"
 
@@ -15,6 +18,26 @@ import (
 
 // globalModel 全局模型引用，用于日志记录的 i18n 支持
 var globalModel *Model
+
+// convertStockData converts types.StockData to main.StockData
+func convertStockData(data *types.StockData) *StockData {
+	if data == nil {
+		return nil
+	}
+	return &StockData{
+		Symbol:        data.Symbol,
+		Name:          data.Name,
+		Price:         data.Price,
+		Change:        data.Change,
+		ChangePercent: data.ChangePercent,
+		StartPrice:    data.StartPrice,
+		MaxPrice:      data.MaxPrice,
+		MinPrice:      data.MinPrice,
+		PrevClose:     data.PrevClose,
+		TurnoverRate:  data.TurnoverRate,
+		Volume:        data.Volume,
+	}
+}
 
 // 获取主菜单项
 // i18n 相关函数已移动到 i18n.go
@@ -53,7 +76,7 @@ func main() {
 	loadI18nFiles()
 
 	// 初始化列注册表
-	initColumnRegistry()
+	ui.InitColumnRegistry()
 
 	// 加载配置文件
 	config := loadConfig()
@@ -594,16 +617,16 @@ func (m *Model) processAddingStep() (tea.Model, tea.Cmd) {
 
 		// 使用搜索功能
 		var stockData *StockData
-		if containsChineseChars(m.input) {
-			stockData = searchChineseStock(m.input)
+		if api.ContainsChineseChars(m.input) {
+			stockData = convertStockData(api.SearchChineseStock(m.input))
 		} else {
 			// 对于非中文输入，先尝试直接获取价格，然后尝试搜索
-			stockData = getStockPrice(m.input)
+			stockData = convertStockData(api.GetStockPrice(m.input))
 
 			// 如果直接获取失败，尝试作为搜索关键词搜索
 			if stockData == nil || stockData.Price <= 0 {
 				logWarn("log.api.addStockFail", m.input)
-				stockData = searchStockBySymbol(m.input)
+				stockData = convertStockData(api.SearchStockBySymbol(m.input))
 			}
 		}
 
@@ -1220,7 +1243,7 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		logInfo("搜索股票: %s", m.searchInput)
 		m.message = m.getText("searching")
-		m.searchResult = getStockInfo(m.searchInput)
+		m.searchResult = convertStockData(api.GetStockInfo(m.searchInput))
 		if m.searchResult == nil || m.searchResult.Name == "" {
 			logInfo("搜索失败: %s", m.searchInput)
 			m.message = fmt.Sprintf(m.getText("searchNotFound"), m.searchInput)
@@ -3243,3 +3266,204 @@ func (m *Model) viewWatchlistSorting() string {
 // parseIntradayTime, calculateAdaptiveMargin, getSmartChartDate, findPreviousTradingDayFromDate,
 // createFixedTimeRange, createIntradayChart, triggerIntradayDataCollection, formatDate,
 // isWeekend, findPreviousTradingDay, findNextTradingDay, handleIntradayChartViewing, viewIntradayChart
+
+// ============================================================================
+// Column Management Methods (delegating to internal/ui)
+// ============================================================================
+
+// GetPortfolioColumns - 获取Portfolio的活跃列列表
+func (m *Model) GetPortfolioColumns() []*ui.ColumnMetadata {
+	return ui.GetPortfolioColumns(m.config.Display.PortfolioColumns, m.getText)
+}
+
+// GetWatchlistColumns - 获取Watchlist的活跃列列表
+func (m *Model) GetWatchlistColumns() []*ui.ColumnMetadata {
+	return ui.GetWatchlistColumns(m.config.Display.WatchlistColumns, m.getText)
+}
+
+// GeneratePortfolioHeader - 生成Portfolio表头（含排序指示器）
+func (m *Model) GeneratePortfolioHeader() table.Row {
+	columns := m.GetPortfolioColumns()
+	return ui.GenerateHeader(
+		columns,
+		m.getText,
+		m.portfolioIsSorted,
+		m.portfolioSortField,
+		m.portfolioSortDirection,
+	)
+}
+
+// GenerateWatchlistHeader - 生成Watchlist表头（含排序指示器）
+func (m *Model) GenerateWatchlistHeader() table.Row {
+	columns := m.GetWatchlistColumns()
+	return ui.GenerateHeader(
+		columns,
+		m.getText,
+		m.watchlistIsSorted,
+		m.watchlistSortField,
+		m.watchlistSortDirection,
+	)
+}
+
+// GeneratePortfolioRow - 生成Portfolio数据行
+func (m *Model) GeneratePortfolioRow(stock *Stock, rowIndex, startIndex, endIndex int) table.Row {
+	columns := m.GetPortfolioColumns()
+	row := make(table.Row, len(columns))
+
+	for i, col := range columns {
+		switch col.ID {
+		case ui.ColCursor:
+			// 光标列特殊处理
+			if m.portfolioCursor >= startIndex && m.portfolioCursor < endIndex && rowIndex == m.portfolioCursor {
+				row[i] = "►"
+			} else {
+				row[i] = ""
+			}
+		case ui.ColCode:
+			row[i] = stock.Code
+		case ui.ColName:
+			row[i] = stock.Name
+		case ui.ColPrevClose:
+			row[i] = fmt.Sprintf("%.3f", stock.PrevClose)
+		case ui.ColOpen:
+			row[i] = m.formatPriceWithColorLang(stock.StartPrice, stock.PrevClose)
+		case ui.ColHigh:
+			row[i] = m.formatPriceWithColorLang(stock.MaxPrice, stock.PrevClose)
+		case ui.ColLow:
+			row[i] = m.formatPriceWithColorLang(stock.MinPrice, stock.PrevClose)
+		case ui.ColPrice:
+			row[i] = m.formatPriceWithColorLang(stock.Price, stock.PrevClose)
+		case ui.ColCost:
+			row[i] = fmt.Sprintf("%.3f", stock.CostPrice)
+		case ui.ColQuantity:
+			row[i] = stock.Quantity
+		case ui.ColTodayChange:
+			if stock.Price > 0 && stock.PrevClose > 0 {
+				row[i] = m.formatProfitRateWithColorZeroLang(stock.ChangePercent)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColPositionProfit:
+			if stock.Price > 0 {
+				profit := stock.CalculatePositionProfit()
+				row[i] = m.formatProfitWithColorZeroLang(profit)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColProfitRate:
+			if stock.Price > 0 && stock.CostPrice > 0 {
+				profitRate := ((stock.Price - stock.CostPrice) / stock.CostPrice) * 100
+				row[i] = m.formatProfitRateWithColorZeroLang(profitRate)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColMarketValue:
+			marketValue := float64(stock.Quantity) * stock.Price
+			row[i] = fmt.Sprintf("%.2f", marketValue)
+		default:
+			row[i] = "-"
+		}
+	}
+
+	return row
+}
+
+// GeneratePortfolioTotalRow - 生成Portfolio总计行
+func (m *Model) GeneratePortfolioTotalRow(totalProfit, totalProfitRate, totalMarketValue float64) table.Row {
+	columns := m.GetPortfolioColumns()
+	row := make(table.Row, len(columns))
+
+	for i, col := range columns {
+		switch col.ID {
+		case ui.ColName:
+			row[i] = m.getText("total")
+		case ui.ColPositionProfit:
+			row[i] = m.formatProfitWithColorLang(totalProfit)
+		case ui.ColProfitRate:
+			row[i] = m.formatProfitRateWithColorLang(totalProfitRate)
+		case ui.ColMarketValue:
+			row[i] = fmt.Sprintf("%.2f", totalMarketValue)
+		default:
+			row[i] = ""
+		}
+	}
+
+	return row
+}
+
+// GenerateWatchlistRow - 生成Watchlist数据行
+func (m *Model) GenerateWatchlistRow(watchStock *WatchlistStock, stockData *StockData, rowIndex, startIndex, endIndex int) table.Row {
+	columns := m.GetWatchlistColumns()
+	row := make(table.Row, len(columns))
+
+	for i, col := range columns {
+		switch col.ID {
+		case ui.ColCursor:
+			// 光标列特殊处理
+			if m.watchlistCursor >= startIndex && m.watchlistCursor < endIndex && rowIndex == m.watchlistCursor {
+				row[i] = "►"
+			} else {
+				row[i] = ""
+			}
+		case ui.ColTag:
+			row[i] = watchStock.getTagsDisplay(m)
+		case ui.ColCode:
+			row[i] = watchStock.Code
+		case ui.ColName:
+			// Watchlist的name列需要portfolio高亮
+			row[i] = m.formatStockNameWithPortfolioHighlight(watchStock.Name, watchStock.Code)
+		case ui.ColPrice:
+			if stockData != nil && stockData.Price > 0 && stockData.PrevClose > 0 {
+				row[i] = m.formatPriceWithColorLang(stockData.Price, stockData.PrevClose)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColPrevClose:
+			if stockData != nil {
+				row[i] = fmt.Sprintf("%.3f", stockData.PrevClose)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColOpen:
+			if stockData != nil && stockData.Price > 0 && stockData.PrevClose > 0 {
+				row[i] = m.formatPriceWithColorLang(stockData.StartPrice, stockData.PrevClose)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColHigh:
+			if stockData != nil && stockData.Price > 0 && stockData.PrevClose > 0 {
+				row[i] = m.formatPriceWithColorLang(stockData.MaxPrice, stockData.PrevClose)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColLow:
+			if stockData != nil && stockData.Price > 0 && stockData.PrevClose > 0 {
+				row[i] = m.formatPriceWithColorLang(stockData.MinPrice, stockData.PrevClose)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColTodayChange:
+			if stockData != nil && stockData.Price > 0 && stockData.PrevClose > 0 {
+				row[i] = m.formatProfitRateWithColorZeroLang(stockData.ChangePercent)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColTurnover:
+			if stockData != nil {
+				row[i] = fmt.Sprintf("%.2f%%", stockData.TurnoverRate)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColVolume:
+			if stockData != nil {
+				row[i] = formatVolume(stockData.Volume)
+			} else {
+				row[i] = "-"
+			}
+		default:
+			row[i] = "-"
+		}
+	}
+
+	return row
+}

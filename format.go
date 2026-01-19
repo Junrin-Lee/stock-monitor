@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"stock-monitor/internal/api"
 
 	"github.com/jedib0t/go-pretty/v6/text"
 )
@@ -68,7 +69,7 @@ func (m *Model) formatProfitRateWithColorZeroLang(rate float64) string {
 // formatProfitRateWithColorZeroLangForStock 格式化盈亏率（支持股票类型检测）
 func (m *Model) formatProfitRateWithColorZeroLangForStock(rate float64, symbol string) string {
 	// 对于非A股（如美股），显示 "-" 表示数据不可用
-	if !isChinaStock(symbol) {
+	if !api.IsChinaStock(symbol) {
 		return "-"
 	}
 	return m.formatProfitRateWithColorZeroLang(rate)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"stock-monitor/internal/api"
 	"strconv"
 	"strings"
 	"time"
@@ -79,7 +80,7 @@ func (m *Model) fetchPrevCloseForStock(code string) float64 {
 
 	// 缓存未命中 - 从API获取
 	logDebug("log.chart.fetchingPrevClose", code)
-	stockData := getStockPrice(code)
+	stockData := api.GetStockPrice(code)
 	if stockData != nil && stockData.PrevClose > 0 {
 		logDebug("log.chart.prevCloseFromAPI", code, stockData.PrevClose)
 		return stockData.PrevClose
@@ -106,7 +107,7 @@ func (m *Model) loadIntradayDataForDate(code, name, date string) (*IntradayData,
 
 	// 向后兼容：如果 Market 为空，自动识别
 	if data.Market == "" {
-		data.Market = getMarketType(code)
+		data.Market = api.GetMarketType(code)
 		logDebug("log.chart.marketAutoDetect", code, data.Market)
 	}
 
@@ -973,7 +974,7 @@ func (m *Model) fetchAndStoreSearchIntradayData(code, name, date string) {
 	}
 
 	// 获取市场类型
-	market := getMarketType(code)
+	market := api.GetMarketType(code)
 
 	// 获取昨收价（用于图表颜色判断）
 	prevClose := 0.0

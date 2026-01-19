@@ -5,98 +5,67 @@ import (
 	"time"
 
 	"github.com/dromara/carbon/v2"
+
+	internalAlert "stock-monitor/internal/alert"
+	"stock-monitor/internal/types"
 )
 
 // canTriggerInCurrentPeriod 检查告警是否可以在当前周期触发
-// 返回 true 表示距离上次触发已经过了足够的时间，可以再次触发
+// 包装 internal/alert 包的函数，用于类型转换
 func canTriggerInCurrentPeriod(alert Alert) bool {
-	// 如果从未触发过，允许触发
-	if alert.TriggeredAt.IsZero() {
-		return true
+	// 转换为 types.Alert
+	typesAlert := types.Alert{
+		ID:            alert.ID,
+		StockCode:     alert.StockCode,
+		StockName:     alert.StockName,
+		Type:          types.AlertType(alert.Type),
+		Condition:     alert.Condition,
+		Threshold:     alert.Threshold,
+		IsActive:      alert.IsActive,
+		Frequency:     types.TriggerFrequency(alert.Frequency),
+		FrequencyDays: alert.FrequencyDays,
+		CreatedAt:     alert.CreatedAt,
+		TriggeredAt:   alert.TriggeredAt,
+		LastChecked:   alert.LastChecked,
+		BatchTag:      alert.BatchTag,
 	}
-
-	now := carbon.Now()
-	lastTriggered := carbon.CreateFromStdTime(alert.TriggeredAt)
-
-	switch alert.Frequency {
-	case TriggerOnce:
-		// 一次性告警已经触发过，不再触发
-		return false
-
-	case TriggerDaily:
-		// 如果不是同一天，可以触发
-		return !isSameDay(now, lastTriggered)
-
-	case TriggerWeekly:
-		// 如果不是同一周，可以触发
-		return !isSameWeek(now, lastTriggered)
-
-	case TriggerMonthly:
-		// 如果不是同一月，可以触发
-		return !isSameMonth(now, lastTriggered)
-
-	case TriggerEveryNDays:
-		if alert.FrequencyDays <= 0 {
-			return false // 无效配置
-		}
-		// 计算距离上次触发的天数
-		daysSinceTrigger := now.DiffAbsInDays(lastTriggered)
-		return daysSinceTrigger >= int64(alert.FrequencyDays)
-
-	default:
-		// 未知频率或空值，视为一次性告警（向后兼容）
-		return false
-	}
+	return internalAlert.CanTriggerInCurrentPeriod(typesAlert)
 }
 
 // isSameDay 判断两个时间是否是同一天
 func isSameDay(a, b *carbon.Carbon) bool {
-	return a.Year() == b.Year() && a.Month() == b.Month() && a.Day() == b.Day()
+	return internalAlert.IsSameDay(a, b)
 }
 
 // isSameWeek 判断两个时间是否是同一周
 func isSameWeek(a, b *carbon.Carbon) bool {
-	aYear, aWeek := a.StdTime().ISOWeek()
-	bYear, bWeek := b.StdTime().ISOWeek()
-	return aYear == bYear && aWeek == bWeek
+	return internalAlert.IsSameWeek(a, b)
 }
 
 // isSameMonth 判断两个时间是否是同一月
 func isSameMonth(a, b *carbon.Carbon) bool {
-	return a.Year() == b.Year() && a.Month() == b.Month()
+	return internalAlert.IsSameMonth(a, b)
 }
 
 // getNextTriggerTime 获取下次可触发的时间
-// 用于 UI 显示目的
 func getNextTriggerTime(alert Alert) time.Time {
-	if alert.TriggeredAt.IsZero() {
-		return time.Now()
+	// 转换为 types.Alert
+	typesAlert := types.Alert{
+		ID:            alert.ID,
+		StockCode:     alert.StockCode,
+		StockName:     alert.StockName,
+		Type:          types.AlertType(alert.Type),
+		Condition:     alert.Condition,
+		Threshold:     alert.Threshold,
+		IsActive:      alert.IsActive,
+		Frequency:     types.TriggerFrequency(alert.Frequency),
+		FrequencyDays: alert.FrequencyDays,
+		CreatedAt:     alert.CreatedAt,
+		TriggeredAt:   alert.TriggeredAt,
+		LastChecked:   alert.LastChecked,
+		BatchTag:      alert.BatchTag,
 	}
-
-	lastTriggered := carbon.CreateFromStdTime(alert.TriggeredAt)
-
-	switch alert.Frequency {
-	case TriggerOnce:
-		return time.Time{} // 永不再触发
-
-	case TriggerDaily:
-		return lastTriggered.AddDay().StartOfDay().StdTime()
-
-	case TriggerWeekly:
-		return lastTriggered.AddWeeks(1).StartOfWeek().StdTime()
-
-	case TriggerMonthly:
-		return lastTriggered.AddMonth().StartOfMonth().StdTime()
-
-	case TriggerEveryNDays:
-		if alert.FrequencyDays <= 0 {
-			return time.Time{}
-		}
-		return lastTriggered.AddDays(alert.FrequencyDays).StartOfDay().StdTime()
-
-	default:
-		return time.Time{}
-	}
+	return internalAlert.GetNextTriggerTime(typesAlert)
 }
 
 // getFrequencyDisplayText 获取频率的显示文本
@@ -151,11 +120,10 @@ func (m *Model) getNextTriggerDisplayText(alert Alert) string {
 
 // getFrequencyOptions 获取所有可用的触发频率选项
 func getFrequencyOptions() []TriggerFrequency {
-	return []TriggerFrequency{
-		TriggerOnce,
-		TriggerDaily,
-		TriggerWeekly,
-		TriggerMonthly,
-		TriggerEveryNDays,
+	options := internalAlert.GetFrequencyOptions()
+	result := make([]TriggerFrequency, len(options))
+	for i, opt := range options {
+		result[i] = TriggerFrequency(opt)
 	}
+	return result
 }
