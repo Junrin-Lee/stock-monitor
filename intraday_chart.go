@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"stock-monitor/internal/api"
+	"stock-monitor/internal/intraday"
 	"strconv"
 	"strings"
 	"time"
@@ -52,7 +53,7 @@ func (m *Model) startIntradayDataCollection() {
 // stopIntradayDataCollection 停止采集分时数据
 func (m *Model) stopIntradayDataCollection() {
 	if m.intradayManager != nil {
-		close(m.intradayManager.cancelChan)
+		close(m.intradayManager.CancelChan)
 		m.intradayManager = nil
 		logDebug("log.intraday.trackStop")
 	}
@@ -92,8 +93,8 @@ func (m *Model) fetchPrevCloseForStock(code string) float64 {
 
 // loadIntradayDataForDate 从磁盘加载特定股票和日期的分时数据
 func (m *Model) loadIntradayDataForDate(code, name, date string) (*IntradayData, error) {
-	// Use getIntradayFilePath for backward compatibility (tries new structure, falls back to old)
-	filePath := getIntradayFilePath(code, date)
+	// Use GetIntradayFilePath for backward compatibility (tries new structure, falls back to old)
+	filePath := intraday.GetIntradayFilePath(code, date)
 
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
@@ -107,7 +108,7 @@ func (m *Model) loadIntradayDataForDate(code, name, date string) (*IntradayData,
 
 	// 向后兼容：如果 Market 为空，自动识别
 	if data.Market == "" {
-		data.Market = api.GetMarketType(code)
+		data.Market = string(api.GetMarketType(code))
 		logDebug("log.chart.marketAutoDetect", code, data.Market)
 	}
 
@@ -130,7 +131,7 @@ func (m *Model) loadIntradayDataForDate(code, name, date string) (*IntradayData,
 
 		// 可选：异步保存更新后的数据（非阻塞，忽略错误）
 		if data.PrevClose > 0 {
-			go saveIntradayData(filePath, &data)
+			go intraday.SaveIntradayData(filePath, &data)
 		}
 	} else {
 		logDebug("log.chart.prevCloseExists", code, data.PrevClose)
@@ -263,7 +264,10 @@ func isWeekend(t time.Time) bool {
 	return weekday == time.Saturday || weekday == time.Sunday
 }
 
-// Note: findPreviousTradingDay 已移至 intraday.go 并增强为支持多市场
+// Note: findPreviousTradingDay wrapper - calls internal/intraday version for multi-market support
+func findPreviousTradingDay(stockCode string, currentDate string, m *Model) string {
+	return intraday.FindPreviousTradingDay(stockCode, currentDate, m)
+}
 
 // findNextTradingDay 查找下一个交易日（跳过周末）
 // 最多往后查找7天，避免无限循环
@@ -306,7 +310,21 @@ func formatDate(dateStr string) string {
 
 // createFixedTimeRange 创建固定的时间范围框架（9:30-15:00，共331个分钟点，包含午休）
 // 创建完整连续的时间轴，午休时段（11:30-13:00）也包含在内，用于正确的时间映射
-func (m *Model) createFixedTimeRange(date string, market MarketType) []TimePoint {
+func (m *Model) createFixedTimeRange(date string, marketStr string) []TimePoint {
+	// Convert string market type to MarketType
+	var market MarketType
+	switch marketStr {
+	case "china":
+		market = MarketChina
+	case "us":
+		market = MarketUS
+	case "hongkong":
+		market = MarketHongKong
+	default:
+		logDebug("log.chart.unknownMarket", marketStr)
+		return nil
+	}
+
 	var marketConfig MarketConfig
 	switch market {
 	case MarketChina:
@@ -685,7 +703,20 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 // ============================================================================
 
 // getMarketTradingSessionText 获取市场交易时段文本
-func (m *Model) getMarketTradingSessionText(market MarketType) string {
+func (m *Model) getMarketTradingSessionText(marketStr string) string {
+	// Convert string market type to MarketType
+	var market MarketType
+	switch marketStr {
+	case "china":
+		market = MarketChina
+	case "us":
+		market = MarketUS
+	case "hongkong":
+		market = MarketHongKong
+	default:
+		return m.getText("tradingSession")
+	}
+
 	var marketConfig MarketConfig
 	switch market {
 	case MarketChina:
@@ -732,11 +763,11 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 	marketLabel := ""
 	if m.chartData != nil {
 		switch m.chartData.Market {
-		case MarketChina:
+		case "china":
 			marketLabel = m.getText("marketChina")
-		case MarketUS:
+		case "us":
 			marketLabel = m.getText("marketUS")
-		case MarketHongKong:
+		case "hongkong":
 			marketLabel = m.getText("marketHongKong")
 		default:
 			marketLabel = m.getText("market")
@@ -939,7 +970,7 @@ func (m *Model) runSearchIntradayWorker(code, name, date string) {
 			}
 
 			// 检查市场是否开市（闭市时降低频率）
-			if !isMarketOpen(code, m) {
+			if !intraday.IsMarketOpen(code, m) {
 				logDebug("log.search.marketClosed", code)
 				// 市场关闭时仍然执行一次获取（获取当日完整数据）
 				// 然后停止 worker
@@ -961,7 +992,7 @@ func (m *Model) runSearchIntradayWorker(code, name, date string) {
 // fetchAndStoreSearchIntradayData 获取并存储搜索模式的分时数据（仅内存）
 func (m *Model) fetchAndStoreSearchIntradayData(code, name, date string) {
 	// 从 API 获取最新数据
-	datapoints, err := fetchIntradayDataFromAPI(code)
+	datapoints, err := intraday.FetchIntradayDataFromAPI(code)
 	if err != nil {
 		logDebug("log.search.fetchFail", code, err)
 		// 不返回错误，继续下次尝试
@@ -974,7 +1005,7 @@ func (m *Model) fetchAndStoreSearchIntradayData(code, name, date string) {
 	}
 
 	// 获取市场类型
-	market := api.GetMarketType(code)
+	market := string(api.GetMarketType(code))
 
 	// 获取昨收价（用于图表颜色判断）
 	prevClose := 0.0
@@ -1171,7 +1202,7 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 
 		// 根据市场类型显示不同的时间标签
 		switch m.searchIntradayData.Market {
-		case MarketChina:
+		case "china":
 			// A股：9:30 和 15:00
 			diff1 := totalMinutes - 570
 			if diff1 < 0 {
@@ -1186,7 +1217,7 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 			} else if diff2 <= 10 { // 15:00 ± 10分钟
 				return "15:00"
 			}
-		case MarketUS:
+		case "us":
 			// 美股：9:30 和 16:00
 			diff1 := totalMinutes - 570
 			if diff1 < 0 {
@@ -1201,7 +1232,7 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 			} else if diff2 <= 10 { // 16:00 ± 10分钟
 				return "16:00"
 			}
-		case MarketHongKong:
+		case "hongkong":
 			// 港股：9:30 和 16:00
 			diff1 := totalMinutes - 570
 			if diff1 < 0 {

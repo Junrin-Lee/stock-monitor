@@ -1,6 +1,8 @@
 package main
 
 import (
+	"stock-monitor/internal/data"
+	"stock-monitor/internal/types"
 	"testing"
 	"time"
 
@@ -194,31 +196,33 @@ func TestCanTriggerInCurrentPeriod_EveryNDays(t *testing.T) {
 
 // TestMigrateAlertFrequency 测试数据迁移函数
 func TestMigrateAlertFrequency(t *testing.T) {
-	alerts := []Alert{
+	// 使用 types.Alert 进行测试（internal/data 使用的类型）
+	typeAlerts := []types.Alert{
 		{
 			StockCode: "SH600000",
 			Frequency: "", // 旧数据，未设置频率
 		},
 		{
 			StockCode: "SZ000001",
-			Frequency: TriggerDaily, // 已设置频率
+			Frequency: types.TriggerDaily, // 已设置频率
 		},
 		{
 			StockCode:     "SH601138",
-			Frequency:     TriggerEveryNDays,
+			Frequency:     types.TriggerEveryNDays,
 			FrequencyDays: 0, // 无效天数
 		},
 	}
 
-	migrated := migrateAlertFrequency(alerts)
+	// 使用 internal/data 包的迁移函数
+	migrated := data.MigrateAlertFrequency(typeAlerts)
 
 	// 检查空频率迁移为 TriggerOnce
-	if migrated[0].Frequency != TriggerOnce {
+	if migrated[0].Frequency != types.TriggerOnce {
 		t.Errorf("空频率应迁移为 TriggerOnce，得到 %s", migrated[0].Frequency)
 	}
 
 	// 检查已设置频率不变
-	if migrated[1].Frequency != TriggerDaily {
+	if migrated[1].Frequency != types.TriggerDaily {
 		t.Errorf("已设置频率不应改变，得到 %s", migrated[1].Frequency)
 	}
 

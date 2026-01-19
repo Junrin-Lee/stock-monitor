@@ -2,21 +2,72 @@ package main
 
 import (
 	"fmt"
-	"os/exec"
-	"runtime"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
-	"github.com/jedib0t/go-pretty/v6/table"
+	alertui "stock-monitor/internal/ui/alert"
+	"stock-monitor/internal/ui"
+	"stock-monitor/internal/types"
 )
+
+// ============================================================================
+// Type Conversion Helpers
+// ============================================================================
+
+// Note: convertAlertsToTypes and convertAlertsFromTypes are defined in persistence.go
+
+// convertCacheToTypes converts main cache map to types cache map
+func convertCacheToTypes(cache map[string]*StockPriceCacheEntry) map[string]*types.StockPriceCacheEntry {
+	result := make(map[string]*types.StockPriceCacheEntry)
+	for k, v := range cache {
+		var data *types.StockData
+		if v.Data != nil {
+			data = &types.StockData{
+				Symbol:         v.Data.Symbol,
+				Name:           v.Data.Name,
+				Price:          v.Data.Price,
+				Change:         v.Data.Change,
+				ChangePercent:  v.Data.ChangePercent,
+				StartPrice:     v.Data.StartPrice,
+				MaxPrice:       v.Data.MaxPrice,
+				MinPrice:       v.Data.MinPrice,
+				PrevClose:      v.Data.PrevClose,
+				Volume:         v.Data.Volume,
+				TurnoverRate:   v.Data.TurnoverRate,
+			}
+		}
+		result[k] = &types.StockPriceCacheEntry{
+			Data:       data,
+			UpdateTime: v.UpdateTime,
+		}
+	}
+	return result
+}
+
+// convertPortfolioToTypes converts main.Portfolio to types.Portfolio
+func convertPortfolioToTypes(p Portfolio) types.Portfolio {
+	stocks := make([]types.Stock, len(p.Stocks))
+	for i, s := range p.Stocks {
+		stocks[i] = types.Stock(s)
+	}
+	return types.Portfolio{Stocks: stocks}
+}
+
+// convertWatchlistToTypes converts main.Watchlist to types.Watchlist
+func convertWatchlistToTypes(w Watchlist) types.Watchlist {
+	stocks := make([]types.WatchlistStock, len(w.Stocks))
+	for i, s := range w.Stocks {
+		stocks[i] = types.WatchlistStock(s)
+	}
+	return types.Watchlist{Stocks: stocks}
+}
 
 // ============================================================================
 // UUID Generation
 // ============================================================================
 
-// generateAlertID 生成 UUID v4 告警 ID
+// generateAlertID generates UUID v4 for alerts
 func generateAlertID() string {
 	return uuid.New().String()
 }
@@ -25,210 +76,134 @@ func generateAlertID() string {
 // Alert Checking Logic
 // ============================================================================
 
-// checkAlertsMsg 检查告警消息
+// checkAlertsMsg message for checking alerts
 type checkAlertsMsg struct{}
 
-// handleCheckAlerts 检查所有告警条件
+// handleCheckAlerts checks all alert conditions
 func (m *Model) handleCheckAlerts(msg checkAlertsMsg) (tea.Model, tea.Cmd) {
-	triggeredAlerts := []Alert{}
+	// Build cache map for alert checking
+	m.stockPriceMutex.RLock()
+	cacheMap := convertCacheToTypes(m.stockPriceCache)
+	m.stockPriceMutex.RUnlock()
 
-	for i, alert := range m.alertData.Alerts {
-		if !alert.IsActive {
-			continue
-		}
+	// Convert alerts to types.Alert for checking
+	typesAlerts := convertAlertsToTypes(m.alertData.Alerts)
 
-		// 检查是否到达触发周期
-		if !canTriggerInCurrentPeriod(alert) {
-			continue
-		}
+	// Check alerts using the alert package
+	triggeredTypesAlerts := alertui.CheckAlerts(typesAlerts, cacheMap, func(a types.Alert) bool {
+		return canTriggerInCurrentPeriod(Alert(a))
+	})
 
-		// 获取当前股票价格
-		m.stockPriceMutex.RLock()
-		cacheEntry, exists := m.stockPriceCache[alert.StockCode]
-		m.stockPriceMutex.RUnlock()
+	// Convert back to main.Alert
+	triggeredAlerts := convertAlertsFromTypes(triggeredTypesAlerts)
 
-		if !exists || cacheEntry.Data == nil {
-			continue
-		}
-
-		stockData := cacheEntry.Data
-
-		// 检查告警条件
-		isTriggered := false
-		switch alert.Type {
-		case AlertTypePrice:
-			isTriggered = checkPriceAlert(stockData, alert)
-		case AlertTypeRate:
-			isTriggered = checkRateAlert(stockData, alert)
-		case AlertTypeVolume:
-			isTriggered = checkVolumeAlert(stockData, alert)
-		}
-
-		if isTriggered {
-			// 更新触发时间
-			alert.TriggeredAt = time.Now()
-
-			// 仅一次性告警禁用，周期性告警保持激活
-			if alert.Frequency == TriggerOnce || alert.Frequency == "" {
-				alert.IsActive = false
-			}
-			// 周期性告警保持 IsActive = true
-
-			triggeredAlerts = append(triggeredAlerts, alert)
-			m.alertData.Alerts[i] = alert
-
-			logInfo("log.alert.triggered", alert.StockName, alert.StockCode)
-		}
-
-		// 更新最后检查时间
-		alert.LastChecked = time.Now()
-		m.alertData.Alerts[i] = alert
-	}
-
-	// 保存告警配置
+	// Update triggered alerts
 	if len(triggeredAlerts) > 0 {
+		for i := range m.alertData.Alerts {
+			for _, triggered := range triggeredAlerts {
+				if m.alertData.Alerts[i].ID == triggered.ID {
+					// Update trigger time
+					m.alertData.Alerts[i].TriggeredAt = time.Now()
+
+					// Disable one-time alerts
+					if m.alertData.Alerts[i].Frequency == TriggerOnce || m.alertData.Alerts[i].Frequency == "" {
+						m.alertData.Alerts[i].IsActive = false
+					}
+
+					logInfo("log.alert.triggered", m.alertData.Alerts[i].StockName, m.alertData.Alerts[i].StockCode)
+					break
+				}
+			}
+			// Update last checked time
+			m.alertData.Alerts[i].LastChecked = time.Now()
+		}
+
+		// Save alert data
 		m.alertData.LastCheck = time.Now().Format("2006-01-02T15:04:05Z07:00")
 		m.saveAlertData()
-	}
 
-	// 发送通知
-	for _, alert := range triggeredAlerts {
-		m.sendAlertNotification(alert)
+		// Send notifications
+		for _, alert := range triggeredAlerts {
+			m.sendAlertNotification(alert)
+		}
 	}
 
 	return m, nil
 }
 
-// checkPriceAlert 检查价格告警
-func checkPriceAlert(stockData *StockData, alert Alert) bool {
-	return CheckNumericCondition(stockData.Price, alert.Threshold, alert.Condition)
-}
-
-// checkRateAlert 检查涨跌幅告警
-func checkRateAlert(stockData *StockData, alert Alert) bool {
-	return CheckNumericCondition(stockData.ChangePercent, alert.Threshold, alert.Condition)
-}
-
-// checkVolumeAlert 检查成交量告警
-func checkVolumeAlert(stockData *StockData, alert Alert) bool {
-	volumeFloat := float64(stockData.Volume)
-	return CheckNumericCondition(volumeFloat, alert.Threshold, alert.Condition)
+// sendAlertNotification sends alert notification
+func (m *Model) sendAlertNotification(a Alert) {
+	alertui.SendNotification(alertui.NotificationParams{
+		Alert:   types.Alert(a),
+		GetText: m.getText,
+	})
 }
 
 // ============================================================================
-// Notification System
+// Helper Functions - Adapter Methods
 // ============================================================================
 
-// sendAlertNotification 发送告警通知
-func (m *Model) sendAlertNotification(alert Alert) {
-	var title, message string
-
-	switch alert.Type {
-	case AlertTypePrice:
-		title = m.getText("alertNotificationPriceTitle")
-		message = fmt.Sprintf("%s (%s) %s %s %.2f",
-			alert.StockName, alert.StockCode,
-			m.getText("alertNotificationPrice"),
-			alert.Condition, alert.Threshold)
-	case AlertTypeRate:
-		title = m.getText("alertNotificationRateTitle")
-		message = fmt.Sprintf("%s (%s) %s %s %.2f%%",
-			alert.StockName, alert.StockCode,
-			m.getText("alertNotificationRate"),
-			alert.Condition, alert.Threshold)
-	case AlertTypeVolume:
-		title = m.getText("alertNotificationVolumeTitle")
-		message = fmt.Sprintf("%s (%s) %s %s %.0f",
-			alert.StockName, alert.StockCode,
-			m.getText("alertNotificationVolume"),
-			alert.Condition, alert.Threshold)
+// getStockAlerts gets all alerts for a specific stock
+func (m *Model) getStockAlerts(stockCode string) []Alert {
+	typesAlerts := make([]types.Alert, len(m.alertData.Alerts))
+	for i, a := range m.alertData.Alerts {
+		typesAlerts[i] = types.Alert(a)
 	}
-
-	// 根据平台选择通知方式
-	switch runtime.GOOS {
-	case "darwin": // macOS
-		m.sendMacOSNotification(title, message)
-	case "linux": // Linux
-		m.sendLinuxNotification(title, message)
-	case "windows": // Windows
-		m.sendWindowsNotification(title, message)
-	default:
-		logWarn("log.alert.unsupportedPlatform", runtime.GOOS)
+	result := alertui.GetStockAlerts(typesAlerts, stockCode)
+	alerts := make([]Alert, len(result))
+	for i, a := range result {
+		alerts[i] = Alert(a)
 	}
+	return alerts
 }
 
-// sendMacOSNotification 发送 macOS 通知 (terminal-notifier)
-func (m *Model) sendMacOSNotification(title, message string) {
-	// 从系统 PATH 查找 terminal-notifier (支持 Homebrew 等多种安装方式)
-	binaryPath, err := exec.LookPath("terminal-notifier")
-	if err != nil {
-		logWarn("log.alert.terminalNotifierNotFound", "")
-		return
-	}
+// getStocksByTag gets all stock codes with the specified tag
+func (m *Model) getStocksByTag(tag string) []string {
+	return alertui.GetStocksByTag(convertWatchlistToTypes(m.watchlist), tag)
+}
 
-	cmd := exec.Command(
-		binaryPath,
-		"-title", title,
-		"-message", message,
-		"-sound", "default",
+// getStocksByMarket gets all stock codes in the specified market
+func (m *Model) getStocksByMarket(marketType MarketType) []string {
+	return alertui.GetStocksByMarket(
+		convertWatchlistToTypes(m.watchlist),
+		convertPortfolioToTypes(m.portfolio),
+		types.MarketType(marketType),
 	)
-
-	if err := cmd.Run(); err != nil {
-		logError("log.alert.notificationFailed", err)
-	} else {
-		logInfo("log.alert.notificationSent", title)
-	}
 }
 
-// sendLinuxNotification 发送 Linux 通知 (notify-send)
-func (m *Model) sendLinuxNotification(title, message string) {
-	cmd := exec.Command("notify-send", title, message)
-	if err := cmd.Run(); err != nil {
-		logWarn("log.alert.notifySendNotFound", "")
-	} else {
-		logInfo("log.alert.notificationSent", title)
-	}
+// parseStockCodes parses stock codes from input
+func parseStockCodes(input string) []string {
+	return alertui.ParseStockCodes(input)
 }
 
-// sendWindowsNotification 发送 Windows 通知 (PowerShell)
-func (m *Model) sendWindowsNotification(title, message string) {
-	psScript := fmt.Sprintf(
-		`[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms"); [System.Windows.Forms.MessageBox]::Show("%s", "%s")`,
-		message, title,
-	)
-	cmd := exec.Command("powershell", "-Command", psScript)
-	if err := cmd.Run(); err != nil {
-		logWarn("log.alert.powershellNotFound", "")
-	} else {
-		logInfo("log.alert.notificationSent", title)
-	}
-}
+// Note: GetAlertTypeFromCursor, GetAlertConditionFromCursor are defined in types.go
+// Note: getFrequencyOptions is defined in alert_frequency.go
 
 // ============================================================================
 // AlertManage State Handler
 // ============================================================================
 
-// handleAlertManage 处理告警管理状态
+// handleAlertManage handles alert management state
 func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q", "m": // 返回主菜单
+	case "esc", "q", "m": // Return to main menu
 		m.state = MainMenu
 		m.message = ""
 		return m, nil
 
-	case "a": // 添加告警
+	case "a": // Add alert
 		m.state = SelectBatchStocks
 		m.batchSelectStep = 0
 		m.batchSelectedStocks = nil
 		m.stockSelectionMap = make(map[string]bool)
 		return m, nil
 
-	case "g": // 批量添加
+	case "g": // Batch add
 		m.state = AlertBatchMethodSelect
 		m.batchSelectStep = 0
 		return m, nil
 
-	case "e": // 编辑告警
+	case "e": // Edit alert
 		if len(m.alertData.Alerts) == 0 {
 			m.message = m.getText("alert.empty")
 			return m, nil
@@ -237,17 +212,17 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// 保存当前选中的告警
+		// Save current selected alert
 		m.currentAlert = m.alertData.Alerts[m.alertCursor]
 		m.selectedAlertType = m.currentAlert.Type
 		m.selectedAlertCondition = m.currentAlert.Condition
 		m.alertThreshold = m.currentAlert.Threshold
 
 		m.state = AlertEdit
-		m.alertManageStep = 0 // 从类型选择开始
+		m.alertManageStep = 0
 		return m, nil
 
-	case "d": // 删除告警
+	case "d": // Delete alert
 		if len(m.alertData.Alerts) == 0 {
 			m.message = m.getText("alert.empty")
 			return m, nil
@@ -256,7 +231,6 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// 立即删除
 		deletedAlert := m.alertData.Alerts[m.alertCursor]
 		m.alertData.Alerts = append(
 			m.alertData.Alerts[:m.alertCursor],
@@ -264,7 +238,6 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		)
 		m.saveAlertData()
 
-		// 调整光标位置
 		if m.alertCursor >= len(m.alertData.Alerts) && m.alertCursor > 0 {
 			m.alertCursor--
 		}
@@ -272,7 +245,7 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf(m.getText("alert.deleteSuccess"), deletedAlert.StockName)
 		return m, nil
 
-	case " ": // 切换告警启用/禁用状态
+	case " ": // Toggle alert enable/disable
 		if len(m.alertData.Alerts) == 0 {
 			m.message = m.getText("alert.empty")
 			return m, nil
@@ -281,11 +254,9 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// 切换状态
 		m.alertData.Alerts[m.alertCursor].IsActive = !m.alertData.Alerts[m.alertCursor].IsActive
 		m.saveAlertData()
 
-		// 显示切换结果
 		alert := m.alertData.Alerts[m.alertCursor]
 		if alert.IsActive {
 			m.message = fmt.Sprintf(m.getText("alert.toggle.enabled"), alert.StockName)
@@ -294,7 +265,7 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "enter": // 查看告警详情
+	case "enter": // View alert details
 		if len(m.alertData.Alerts) == 0 {
 			m.message = m.getText("alert.empty")
 			return m, nil
@@ -304,15 +275,7 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		alert := m.alertData.Alerts[m.alertCursor]
-		typeText := ""
-		switch alert.Type {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
+		typeText := alertui.GetAlertTypeText(alert.Type, m.getText)
 
 		details := fmt.Sprintf("%s: %s %s %s %.2f | %s: %s",
 			m.getText("alertDetailStock"), alert.StockName, typeText, alert.Condition, alert.Threshold,
@@ -321,13 +284,13 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = details
 		return m, nil
 
-	case "up", "k", "w": // 向上滚动
+	case "up", "k", "w": // Scroll up
 		if m.alertCursor > 0 {
 			m.alertCursor--
 		}
 		return m, nil
 
-	case "down", "j", "s": // 向下滚动
+	case "down", "j", "s": // Scroll down
 		if m.alertCursor < len(m.alertData.Alerts)-1 {
 			m.alertCursor++
 		}
@@ -338,239 +301,44 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// viewAlertManage 渲染告警管理界面
+// viewAlertManage renders alert management interface
 func (m *Model) viewAlertManage() string {
-	s := m.getText("alertTitle") + "\n\n"
+	m.stockPriceMutex.RLock()
+	cacheMap := convertCacheToTypes(m.stockPriceCache)
+	m.stockPriceMutex.RUnlock()
 
-	// 空列表提示
-	if len(m.alertData.Alerts) == 0 {
-		s += m.getText("alert.empty") + "\n\n"
-		s += m.getText("alert.addFirst") + "\n\n"
-		s += m.getText("alertHelp") + "\n"
-		return s
-	}
+	typesAlerts := convertAlertsToTypes(m.alertData.Alerts)
 
-	// 创建表格
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-
-	// 表头
-	t.AppendHeader(table.Row{
-		m.getText("alertHeaderCode"),
-		m.getText("alertHeaderName"),
-		m.getText("alertHeaderType"),
-		m.getText("alertHeaderCondition"),
-		m.getText("alertHeaderThreshold"),
-		m.getText("alertHeaderSwitch"),
-		m.getText("alertHeaderFrequency"),
-		m.getText("alertHeaderTriggeredAt"),
-		m.getText("alertHeaderCreated"),
+	return alertui.RenderAlertManage(alertui.AlertManageViewParams{
+		ViewParams: alertui.ViewParams{
+			GetText:         m.getText,
+			Config:          types.Config(m.config),
+			StockPriceCache: cacheMap,
+		},
+		Alerts:      typesAlerts,
+		AlertCursor: m.alertCursor,
+		Message:     m.message,
 	})
-
-	// 计算显示范围(分页)
-	maxLines := m.config.Display.MaxLines
-	startIndex := m.alertCursor
-	if startIndex > len(m.alertData.Alerts)-maxLines {
-		startIndex = len(m.alertData.Alerts) - maxLines
-		if startIndex < 0 {
-			startIndex = 0
-		}
-	}
-	endIndex := startIndex + maxLines
-	if endIndex > len(m.alertData.Alerts) {
-		endIndex = len(m.alertData.Alerts)
-	}
-
-	// 数据行
-	for i := startIndex; i < endIndex; i++ {
-		alert := m.alertData.Alerts[i]
-
-		// 开关状态（仅图标）
-		var switchText string
-		if alert.IsActive {
-			switchText = "✓"
-		} else {
-			switchText = "✗"
-		}
-
-		// 触发时间（具体时间或 -）
-		var triggeredText string
-		if alert.TriggeredAt.IsZero() {
-			triggeredText = "-"
-		} else {
-			triggeredText = alert.TriggeredAt.Format("2006-01-02 15:04:05")
-		}
-
-		// 触发频率
-		frequencyText := m.getFrequencyDisplayText(alert.Frequency, alert.FrequencyDays)
-
-		// 类型文本
-		typeText := ""
-		switch alert.Type {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		// 游标标记
-		cursor := "  "
-		if i == m.alertCursor {
-			cursor = "► "
-		}
-
-		row := table.Row{
-			cursor + alert.StockCode,
-			alert.StockName,
-			typeText,
-			alert.Condition,
-			fmt.Sprintf("%.2f", alert.Threshold),
-			switchText,
-			frequencyText,
-			triggeredText,
-			alert.CreatedAt.Format("2006-01-02 15:04:05"),
-		}
-
-		t.AppendRow(row)
-		t.AppendSeparator()
-	}
-
-	s += t.Render() + "\n\n"
-
-	// 分页信息
-	total := len(m.alertData.Alerts)
-	currentPos := m.alertCursor + 1
-	s += fmt.Sprintf("📊 %s (%d/%d)\n\n", m.getText("alertListTitle"), currentPos, total)
-
-	// 帮助信息
-	s += m.getText("alertHelp") + "\n"
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-// getStockAlerts 获取指定股票的所有告警
-func (m *Model) getStockAlerts(stockCode string) []Alert {
-	var alerts []Alert
-	for _, alert := range m.alertData.Alerts {
-		if alert.StockCode == stockCode {
-			alerts = append(alerts, alert)
-		}
-	}
-	return alerts
-}
-
-// getStocksByTag 获取指定标签下的所有股票代码
-func (m *Model) getStocksByTag(tag string) []string {
-	codes := []string{}
-	seen := make(map[string]bool)
-
-	// 从自选列表中获取
-	for _, stock := range m.watchlist.Stocks {
-		for _, stockTag := range stock.Tags {
-			if stockTag == tag {
-				if !seen[stock.Code] {
-					codes = append(codes, stock.Code)
-					seen[stock.Code] = true
-				}
-				break
-			}
-		}
-	}
-
-	return codes
-}
-
-// getStocksByMarket 获取指定市场下的所有股票代码
-func (m *Model) getStocksByMarket(marketType MarketType) []string {
-	codes := []string{}
-	seen := make(map[string]bool)
-
-	// 从自选列表中获取
-	for _, stock := range m.watchlist.Stocks {
-		if stock.Market == marketType {
-			if !seen[stock.Code] {
-				codes = append(codes, stock.Code)
-				seen[stock.Code] = true
-			}
-		}
-	}
-
-	// 从持股列表中获取
-	for _, stock := range m.portfolio.Stocks {
-		// 根据股票代码判断市场
-		if isMarketType(stock.Code, marketType) {
-			if !seen[stock.Code] {
-				codes = append(codes, stock.Code)
-				seen[stock.Code] = true
-			}
-		}
-	}
-
-	return codes
-}
-
-// isMarketType 判断股票代码是否属于指定市场
-func isMarketType(stockCode string, marketType MarketType) bool {
-	switch marketType {
-	case MarketChina:
-		return strings.HasPrefix(stockCode, "SH") || strings.HasPrefix(stockCode, "SZ")
-	case MarketUS:
-		return !strings.HasPrefix(stockCode, "SH") && !strings.HasPrefix(stockCode, "SZ") && !strings.HasPrefix(stockCode, "HK")
-	case MarketHongKong:
-		return strings.HasPrefix(stockCode, "HK")
-	default:
-		return false
-	}
-}
-
-// parseStockCodes 解析股票代码（支持逗号和换行分隔）
-func parseStockCodes(input string) []string {
-	codes := []string{}
-
-	// 先按换行分割,再按逗号分割
-	lines := strings.Split(input, "\n")
-	for _, line := range lines {
-		parts := strings.Split(line, ",")
-		for _, part := range parts {
-			code := strings.TrimSpace(part)
-			if code != "" {
-				codes = append(codes, code)
-			}
-		}
-	}
-
-	return codes
 }
 
 // ============================================================================
 // StockAlertManage State Handler
 // ============================================================================
 
-// handleStockAlertManage 处理股票告警详情状态
+// handleStockAlertManage handles stock alert details state
 func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q", "m": // 返回来源列表
+	case "esc", "q", "m": // Return to source list
 		m.state = m.previousState
 		m.message = ""
-		m.stockAlertAlerts = nil // 清空缓存
+		m.stockAlertAlerts = nil
 		return m, nil
 
-	case "a": // 添加告警
+	case "a": // Add alert
 		m.state = AlertAdd
 		m.alertManageStep = 0
 		m.alertInput = ""
 		m.alertInputCursor = 0
-		// 预先填入当前股票信息
 		m.currentAlert = Alert{
 			StockCode: m.stockAlertCode,
 			StockName: m.stockAlertName,
@@ -582,7 +350,7 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "e": // 编辑告警
+	case "e": // Edit alert
 		if len(m.stockAlertAlerts) == 0 {
 			m.message = m.getText("alert.empty")
 			return m, nil
@@ -591,7 +359,6 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// 保存当前选中的告警
 		m.currentAlert = m.stockAlertAlerts[m.stockAlertCursor]
 		m.selectedAlertType = m.currentAlert.Type
 		m.selectedAlertCondition = m.currentAlert.Condition
@@ -601,7 +368,7 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.alertManageStep = 0
 		return m, nil
 
-	case "d": // 删除告警
+	case "d": // Delete alert
 		if len(m.stockAlertAlerts) == 0 {
 			m.message = m.getText("alert.empty")
 			return m, nil
@@ -610,10 +377,9 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// 立即删除
 		deletedAlert := m.stockAlertAlerts[m.stockAlertCursor]
 
-		// 从全局告警列表中删除
+		// Delete from global alert list
 		for i, alert := range m.alertData.Alerts {
 			if alert.ID == deletedAlert.ID {
 				m.alertData.Alerts = append(
@@ -624,13 +390,12 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// 同时从股票告警列表中删除
+		// Also delete from stock alert list
 		m.stockAlertAlerts = append(
 			m.stockAlertAlerts[:m.stockAlertCursor],
 			m.stockAlertAlerts[m.stockAlertCursor+1:]...,
 		)
 
-		// 调整光标位置
 		if m.stockAlertCursor >= len(m.stockAlertAlerts) && m.stockAlertCursor > 0 {
 			m.stockAlertCursor--
 		}
@@ -639,7 +404,7 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf(m.getText("alert.deleteSuccess"), deletedAlert.StockName)
 		return m, nil
 
-	case " ": // 切换告警启用/禁用状态
+	case " ": // Toggle alert enable/disable
 		if len(m.stockAlertAlerts) == 0 {
 			m.message = m.getText("alert.empty")
 			return m, nil
@@ -648,21 +413,17 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// 获取当前选中的告警 ID
 		alertID := m.stockAlertAlerts[m.stockAlertCursor].ID
 
-		// 在全局列表中找到并切换状态
 		for i := range m.alertData.Alerts {
 			if m.alertData.Alerts[i].ID == alertID {
 				m.alertData.Alerts[i].IsActive = !m.alertData.Alerts[i].IsActive
-				// 同步更新本地缓存
 				m.stockAlertAlerts[m.stockAlertCursor].IsActive = m.alertData.Alerts[i].IsActive
 				break
 			}
 		}
 		m.saveAlertData()
 
-		// 显示切换结果
 		alert := m.stockAlertAlerts[m.stockAlertCursor]
 		if alert.IsActive {
 			m.message = fmt.Sprintf(m.getText("alert.toggle.enabled"), alert.StockName)
@@ -671,7 +432,7 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "enter": // 查看告警详情
+	case "enter": // View alert details
 		if len(m.stockAlertAlerts) == 0 {
 			m.message = m.getText("alert.empty")
 			return m, nil
@@ -681,15 +442,7 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		alert := m.stockAlertAlerts[m.stockAlertCursor]
-		typeText := ""
-		switch alert.Type {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
+		typeText := alertui.GetAlertTypeText(alert.Type, m.getText)
 
 		details := fmt.Sprintf("%s %s %.2f | %s: %s",
 			typeText, alert.Condition, alert.Threshold,
@@ -698,13 +451,13 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = details
 		return m, nil
 
-	case "up", "k", "w": // 向上滚动
+	case "up", "k", "w": // Scroll up
 		if m.stockAlertCursor > 0 {
 			m.stockAlertCursor--
 		}
 		return m, nil
 
-	case "down", "j", "s": // 向下滚动
+	case "down", "j", "s": // Scroll down
 		if m.stockAlertCursor < len(m.stockAlertAlerts)-1 {
 			m.stockAlertCursor++
 		}
@@ -715,169 +468,54 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// viewStockAlertManage 渲染股票告警详情界面
+// viewStockAlertManage renders stock alert details interface
 func (m *Model) viewStockAlertManage() string {
-	// 获取当前股票价格
 	m.stockPriceMutex.RLock()
-	cacheEntry, exists := m.stockPriceCache[m.stockAlertCode]
+	cacheMap := convertCacheToTypes(m.stockPriceCache)
 	m.stockPriceMutex.RUnlock()
 
-	s := fmt.Sprintf("=== %s (%s) - %s ===\n\n",
-		m.stockAlertName, m.stockAlertCode, m.getText("alertManagement"))
+	typesAlerts := convertAlertsToTypes(m.stockAlertAlerts)
 
-	// 显示当前价格信息
-	if exists && cacheEntry.Data != nil {
-		stockData := cacheEntry.Data
-		changeStr := fmt.Sprintf("%.2f%%", stockData.ChangePercent)
-		if stockData.ChangePercent >= 0 {
-			changeStr = "+" + changeStr
-		}
-		s += fmt.Sprintf("%s: %.2f (%s) | %s: %.2f\n\n",
-			m.getText("alertCurrentPrice"), stockData.Price, changeStr,
-			m.getText("alertPrevClose"), stockData.PrevClose)
-	} else {
-		s += fmt.Sprintf("%s: -\n\n", m.getText("alertCurrentPrice"))
-	}
-
-	// 空列表提示
-	if len(m.stockAlertAlerts) == 0 {
-		s += m.getText("alert.stock.empty") + "\n\n"
-		s += m.getText("alertStockEmptyHint1") + "\n"
-		s += m.getText("alertStockEmptyHint2") + "\n\n"
-		s += m.getText("alert.stockHelp") + "\n"
-		return s
-	}
-
-	// 创建表格
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-
-	// 表头
-	t.AppendHeader(table.Row{
-		m.getText("alertHeaderCode"),
-		m.getText("alertHeaderName"),
-		m.getText("alertHeaderType"),
-		m.getText("alertHeaderCondition"),
-		m.getText("alertHeaderThreshold"),
-		m.getText("alertHeaderSwitch"),
-		m.getText("alertHeaderFrequency"),
-		m.getText("alertHeaderTriggeredAt"),
-		m.getText("alertHeaderCreated"),
+	return alertui.RenderStockAlertManage(alertui.StockAlertViewParams{
+		ViewParams: alertui.ViewParams{
+			GetText:         m.getText,
+			Config:          types.Config(m.config),
+			StockPriceCache: cacheMap,
+		},
+		StockCode:   m.stockAlertCode,
+		StockName:   m.stockAlertName,
+		Alerts:      typesAlerts,
+		AlertCursor: m.stockAlertCursor,
+		Message:     m.message,
 	})
-
-	// 计算显示范围
-	maxLines := m.config.Display.MaxLines
-	startIndex := m.stockAlertCursor
-	if startIndex > len(m.stockAlertAlerts)-maxLines {
-		startIndex = len(m.stockAlertAlerts) - maxLines
-		if startIndex < 0 {
-			startIndex = 0
-		}
-	}
-	endIndex := startIndex + maxLines
-	if endIndex > len(m.stockAlertAlerts) {
-		endIndex = len(m.stockAlertAlerts)
-	}
-
-	// 数据行
-	for i := startIndex; i < endIndex; i++ {
-		alert := m.stockAlertAlerts[i]
-
-		// 开关状态（仅图标）
-		var switchText string
-		if alert.IsActive {
-			switchText = "✓"
-		} else {
-			switchText = "✗"
-		}
-
-		// 类型文本
-		typeText := ""
-		switch alert.Type {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		// 触发频率
-		frequencyText := m.getFrequencyDisplayText(alert.Frequency, alert.FrequencyDays)
-
-		// 触发时间
-		triggeredTime := "-"
-		if !alert.TriggeredAt.IsZero() {
-			triggeredTime = alert.TriggeredAt.Format("2006-01-02 15:04:05")
-		}
-
-		// 游标标记
-		cursor := "  "
-		if i == m.stockAlertCursor {
-			cursor = "► "
-		}
-
-		row := table.Row{
-			cursor + alert.StockCode,
-			alert.StockName,
-			typeText,
-			alert.Condition,
-			fmt.Sprintf("%.2f", alert.Threshold),
-			switchText,
-			frequencyText,
-			triggeredTime,
-			alert.CreatedAt.Format("2006-01-02 15:04:05"),
-		}
-
-		t.AppendRow(row)
-		t.AppendSeparator()
-	}
-
-	s += m.getText("alertStockListTitle") + "\n\n"
-	s += t.Render() + "\n\n"
-
-	// 分页信息
-	total := len(m.stockAlertAlerts)
-	currentPos := m.stockAlertCursor + 1
-	s += fmt.Sprintf("📊 %s %s (%d/%d)\n\n",
-		m.stockAlertName, m.getText("alertListTitle"), currentPos, total)
-
-	// 帮助信息
-	s += m.getText("alert.stockHelp") + "\n"
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
 }
 
 // ============================================================================
 // AlertAdd State Handler (Type/Condition/Threshold)
 // ============================================================================
 
-// handleAlertAdd 处理添加告警状态
+// handleAlertAdd handles add alert state
 func (m *Model) handleAlertAdd(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.alertManageStep {
-	case 0: // 选择告警类型
+	case 0: // Select alert type
 		return m.handleAlertTypeSelect(msg)
-	case 1: // 选择条件
+	case 1: // Select condition
 		return m.handleAlertConditionSelect(msg)
-	case 2: // 输入阈值
+	case 2: // Input threshold
 		return m.handleAlertThresholdInput(msg)
-	case 3: // 选择触发频率
+	case 3: // Select trigger frequency
 		return m.handleAlertFrequencySelectStep(msg)
-	case 4: // 输入自定义天数
+	case 4: // Input custom days
 		return m.handleAlertFrequencyDaysInput(msg)
 	default:
 		return m, nil
 	}
 }
 
-// handleAlertTypeSelect 处理告警类型选择
+// handleAlertTypeSelect handles alert type selection
 func (m *Model) handleAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回
+	case "esc", "q": // Return
 		if m.previousState == StockAlertManage {
 			m.state = StockAlertManage
 		} else {
@@ -893,16 +531,13 @@ func (m *Model) handleAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "down", "j", "s":
-		if m.tagSelectCursor < 2 { // 3种类型
+		if m.tagSelectCursor < 2 { // 3 types
 			m.tagSelectCursor++
 		}
 		return m, nil
 
 	case "enter", " ":
-		// 设置告警类型
 		m.selectedAlertType = GetAlertTypeFromCursor(m.tagSelectCursor)
-
-		// 进入条件选择
 		m.alertManageStep = 1
 		m.tagSelectCursor = 0
 		return m, nil
@@ -912,10 +547,10 @@ func (m *Model) handleAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleAlertConditionSelect 处理条件选择
+// handleAlertConditionSelect handles condition selection
 func (m *Model) handleAlertConditionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回上一步
+	case "esc", "q": // Return to previous step
 		m.alertManageStep = 0
 		m.tagSelectCursor = 0
 		return m, nil
@@ -927,16 +562,13 @@ func (m *Model) handleAlertConditionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 
 	case "down", "j", "s":
-		if m.tagSelectCursor < 3 { // 4种条件
+		if m.tagSelectCursor < 3 { // 4 conditions
 			m.tagSelectCursor++
 		}
 		return m, nil
 
 	case "enter", " ":
-		// 设置条件
 		m.selectedAlertCondition = GetAlertConditionFromCursor(m.tagSelectCursor)
-
-		// 进入阈值输入
 		m.alertManageStep = 2
 		m.alertInput = ""
 		m.alertInputCursor = 0
@@ -947,16 +579,15 @@ func (m *Model) handleAlertConditionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	}
 }
 
-// handleAlertThresholdInput 处理阈值输入
+// handleAlertThresholdInput handles threshold input
 func (m *Model) handleAlertThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回上一步
+	case "esc", "q": // Return to previous step
 		m.alertManageStep = 1
 		m.tagSelectCursor = 0
 		return m, nil
 
 	case "enter":
-		// 验证输入
 		var threshold float64
 		_, err := fmt.Sscanf(m.alertInput, "%f", &threshold)
 		if err != nil || m.alertInput == "" {
@@ -964,9 +595,8 @@ func (m *Model) handleAlertThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// 保存阈值，进入频率选择步骤
 		m.alertThreshold = threshold
-		m.alertManageStep = 3 // 进入频率选择
+		m.alertManageStep = 3
 		m.alertFrequencyCursor = 0
 		m.selectedAlertFrequency = ""
 		return m, nil
@@ -978,7 +608,6 @@ func (m *Model) handleAlertThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		// 只接受数字、小数点和负号
 		if len(msg.String()) == 1 {
 			char := msg.String()
 			if (char >= "0" && char <= "9") || char == "." || char == "-" {
@@ -989,12 +618,12 @@ func (m *Model) handleAlertThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleAlertFrequencySelectStep 处理触发频率选择
+// handleAlertFrequencySelectStep handles trigger frequency selection
 func (m *Model) handleAlertFrequencySelectStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	frequencyOptions := getFrequencyOptions()
 
 	switch msg.String() {
-	case "esc", "q": // 返回上一步
+	case "esc", "q": // Return to previous step
 		m.alertManageStep = 2
 		m.alertInput = fmt.Sprintf("%.2f", m.alertThreshold)
 		return m, nil
@@ -1015,12 +644,10 @@ func (m *Model) handleAlertFrequencySelectStep(msg tea.KeyMsg) (tea.Model, tea.C
 		m.selectedAlertFrequency = frequencyOptions[m.alertFrequencyCursor]
 
 		if m.selectedAlertFrequency == TriggerEveryNDays {
-			// 需要输入自定义天数
 			m.alertManageStep = 4
 			m.alertInput = ""
 			m.alertInputCursor = 0
 		} else {
-			// 直接创建告警
 			return m.createAlertWithFrequency()
 		}
 		return m, nil
@@ -1030,16 +657,15 @@ func (m *Model) handleAlertFrequencySelectStep(msg tea.KeyMsg) (tea.Model, tea.C
 	}
 }
 
-// handleAlertFrequencyDaysInput 处理自定义天数输入
+// handleAlertFrequencyDaysInput handles custom days input
 func (m *Model) handleAlertFrequencyDaysInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回上一步
+	case "esc", "q": // Return to previous step
 		m.alertManageStep = 3
-		m.alertFrequencyCursor = 4 // 定位到"自定义天数"选项
+		m.alertFrequencyCursor = 4
 		return m, nil
 
 	case "enter":
-		// 验证输入
 		var days int
 		_, err := fmt.Sscanf(m.alertInput, "%d", &days)
 		if err != nil || days <= 0 {
@@ -1056,7 +682,6 @@ func (m *Model) handleAlertFrequencyDaysInput(msg tea.KeyMsg) (tea.Model, tea.Cm
 		return m, nil
 
 	default:
-		// 只接受数字
 		if len(msg.String()) == 1 {
 			char := msg.String()
 			if char >= "0" && char <= "9" {
@@ -1067,7 +692,7 @@ func (m *Model) handleAlertFrequencyDaysInput(msg tea.KeyMsg) (tea.Model, tea.Cm
 	}
 }
 
-// createAlertWithFrequency 使用选定的频率创建告警
+// createAlertWithFrequency creates alert with selected frequency
 func (m *Model) createAlertWithFrequency() (tea.Model, tea.Cmd) {
 	alert := Alert{
 		ID:            generateAlertID(),
@@ -1090,7 +715,7 @@ func (m *Model) createAlertWithFrequency() (tea.Model, tea.Cmd) {
 
 	m.message = fmt.Sprintf(m.getText("alert.createSuccess"), alert.StockName)
 
-	// 返回来源状态
+	// Return to source state
 	if m.previousState == StockAlertManage {
 		m.stockAlertAlerts = m.getStockAlerts(m.stockAlertCode)
 		m.state = StockAlertManage
@@ -1098,7 +723,7 @@ func (m *Model) createAlertWithFrequency() (tea.Model, tea.Cmd) {
 		m.state = AlertManage
 	}
 
-	// 重置状态
+	// Reset state
 	m.alertManageStep = 0
 	m.tagSelectCursor = 0
 	m.alertInput = ""
@@ -1110,174 +735,45 @@ func (m *Model) createAlertWithFrequency() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// viewAlertAdd 渲染添加告警界面
+// viewAlertAdd renders add alert interface
 func (m *Model) viewAlertAdd() string {
-	s := "=== " + m.getText("alertAddTitle") + " ===\n\n"
-
-	s += fmt.Sprintf("%s: %s (%s)\n\n",
-		m.getText("alertStock"), m.currentAlert.StockName, m.currentAlert.StockCode)
-
-	switch m.alertManageStep {
-	case 0: // 选择类型
-		s += m.getText("alertSelectType") + "\n\n"
-
-		types := []string{
-			m.getText("alertTypePrice"),
-			m.getText("alertTypeRate"),
-			m.getText("alertTypeVolume"),
-		}
-
-		for i, typeText := range types {
-			prefix := "  "
-			if i == m.tagSelectCursor {
-				prefix = "► "
-			}
-			s += fmt.Sprintf("%s%s\n", prefix, typeText)
-		}
-
-		s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	case 1: // 选择条件
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n\n", m.getText("alertType"), typeText)
-		s += m.getText("alertSelectCondition") + "\n\n"
-
-		conditions := []string{
-			m.getText("alertConditionAbove"),
-			m.getText("alertConditionBelow"),
-			m.getText("alertConditionAboveEq"),
-			m.getText("alertConditionBelowEq"),
-		}
-
-		for i, condText := range conditions {
-			prefix := "  "
-			if i == m.tagSelectCursor {
-				prefix = "► "
-			}
-			s += fmt.Sprintf("%s%s\n", prefix, condText)
-		}
-
-		s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	case 2: // 输入阈值
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertType"), typeText)
-		s += fmt.Sprintf("%s: %s\n\n", m.getText("alertCondition"), m.selectedAlertCondition)
-
-		s += m.getText("alertInputThreshold") + "\n"
-		s += "┌────────────────────────────────────────────┐\n"
-		s += fmt.Sprintf("│ %-42s │\n", m.alertInput)
-		s += "└────────────────────────────────────────────┘\n\n"
-
-		s += m.getText("alertHelp.input") + "\n"
-
-	case 3: // 选择触发频率
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertType"), typeText)
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertCondition"), m.selectedAlertCondition)
-		s += fmt.Sprintf("%s: %.2f\n\n", m.getText("alert.threshold"), m.alertThreshold)
-
-		s += m.getText("alert.selectFrequency") + "\n\n"
-
-		frequencyTexts := []string{
-			m.getText("alert.frequency.once"),
-			m.getText("alert.frequency.daily"),
-			m.getText("alert.frequency.weekly"),
-			m.getText("alert.frequency.monthly"),
-			m.getText("alert.frequency.everyNDays.option"),
-		}
-
-		for i, freqText := range frequencyTexts {
-			prefix := "  "
-			if i == m.alertFrequencyCursor {
-				prefix = "► "
-			}
-			s += fmt.Sprintf("%s%s\n", prefix, freqText)
-		}
-
-		s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	case 4: // 输入自定义天数
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertType"), typeText)
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertCondition"), m.selectedAlertCondition)
-		s += fmt.Sprintf("%s: %.2f\n", m.getText("alert.threshold"), m.alertThreshold)
-		s += fmt.Sprintf("%s: %s\n\n", m.getText("alert.frequency"), m.getText("alert.frequency.everyNDays.option"))
-
-		s += m.getText("alert.frequency.enterDays") + "\n"
-		s += "┌────────────────────────────────────────────┐\n"
-		s += fmt.Sprintf("│ %-42s │\n", m.alertInput)
-		s += "└────────────────────────────────────────────┘\n\n"
-
-		s += m.getText("alertHelp.input") + "\n"
-	}
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderAlertAdd(alertui.AlertAddViewParams{
+		GetText:              m.getText,
+		StockCode:            m.currentAlert.StockCode,
+		StockName:            m.currentAlert.StockName,
+		Step:                 m.alertManageStep,
+		TagSelectCursor:      m.tagSelectCursor,
+		SelectedAlertType:    types.AlertType(m.selectedAlertType),
+		SelectedCondition:    m.selectedAlertCondition,
+		AlertThreshold:       m.alertThreshold,
+		AlertInput:           m.alertInput,
+		AlertFrequencyCursor: m.alertFrequencyCursor,
+		Message:              m.message,
+	})
 }
 
 // ============================================================================
 // AlertEdit State Handler
 // ============================================================================
 
-// handleAlertEdit 处理编辑告警状态
+// handleAlertEdit handles edit alert state
 func (m *Model) handleAlertEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// 编辑流程与添加相同,复用相同的步骤
 	switch m.alertManageStep {
-	case 0: // 选择告警类型
+	case 0: // Select alert type
 		return m.handleAlertEditTypeSelect(msg)
-	case 1: // 选择条件
+	case 1: // Select condition
 		return m.handleAlertEditConditionSelect(msg)
-	case 2: // 输入阈值
+	case 2: // Input threshold
 		return m.handleAlertEditThresholdInput(msg)
 	default:
 		return m, nil
 	}
 }
 
-// handleAlertEditTypeSelect 处理编辑告警类型选择
+// handleAlertEditTypeSelect handles edit alert type selection
 func (m *Model) handleAlertEditTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回
+	case "esc", "q": // Return
 		if m.previousState == StockAlertManage {
 			m.state = StockAlertManage
 		} else {
@@ -1293,16 +789,13 @@ func (m *Model) handleAlertEditTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "down", "j", "s":
-		if m.tagSelectCursor < 2 { // 3种类型
+		if m.tagSelectCursor < 2 { // 3 types
 			m.tagSelectCursor++
 		}
 		return m, nil
 
 	case "enter", " ":
-		// 设置告警类型
 		m.selectedAlertType = GetAlertTypeFromCursor(m.tagSelectCursor)
-
-		// 进入条件选择
 		m.alertManageStep = 1
 		m.tagSelectCursor = 0
 		return m, nil
@@ -1312,10 +805,10 @@ func (m *Model) handleAlertEditTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleAlertEditConditionSelect 处理编辑条件选择
+// handleAlertEditConditionSelect handles edit condition selection
 func (m *Model) handleAlertEditConditionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回上一步
+	case "esc", "q": // Return to previous step
 		m.alertManageStep = 0
 		m.tagSelectCursor = 0
 		return m, nil
@@ -1327,17 +820,15 @@ func (m *Model) handleAlertEditConditionSelect(msg tea.KeyMsg) (tea.Model, tea.C
 		return m, nil
 
 	case "down", "j", "s":
-		if m.tagSelectCursor < 3 { // 4种条件
+		if m.tagSelectCursor < 3 { // 4 conditions
 			m.tagSelectCursor++
 		}
 		return m, nil
 
 	case "enter", " ":
-		// 设置条件
 		conditions := []string{">", "<", ">=", "<="}
 		m.selectedAlertCondition = conditions[m.tagSelectCursor]
 
-		// 进入阈值输入
 		m.alertManageStep = 2
 		m.alertInput = fmt.Sprintf("%.2f", m.currentAlert.Threshold)
 		m.alertInputCursor = 0
@@ -1348,16 +839,15 @@ func (m *Model) handleAlertEditConditionSelect(msg tea.KeyMsg) (tea.Model, tea.C
 	}
 }
 
-// handleAlertEditThresholdInput 处理编辑阈值输入
+// handleAlertEditThresholdInput handles edit threshold input
 func (m *Model) handleAlertEditThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回上一步
+	case "esc", "q": // Return to previous step
 		m.alertManageStep = 1
 		m.tagSelectCursor = 0
 		return m, nil
 
 	case "enter":
-		// 验证输入
 		var threshold float64
 		_, err := fmt.Sscanf(m.alertInput, "%f", &threshold)
 		if err != nil || m.alertInput == "" {
@@ -1365,7 +855,7 @@ func (m *Model) handleAlertEditThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cm
 			return m, nil
 		}
 
-		// 更新告警
+		// Update alert
 		for i, alert := range m.alertData.Alerts {
 			if alert.ID == m.currentAlert.ID {
 				m.alertData.Alerts[i].Type = m.selectedAlertType
@@ -1378,16 +868,15 @@ func (m *Model) handleAlertEditThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cm
 		m.saveAlertData()
 		m.message = m.getText("alert.editSuccess")
 
-		// 返回来源状态
+		// Return to source state
 		if m.previousState == StockAlertManage {
-			// 刷新股票告警列表
 			m.stockAlertAlerts = m.getStockAlerts(m.stockAlertCode)
 			m.state = StockAlertManage
 		} else {
 			m.state = AlertManage
 		}
 
-		// 重置状态
+		// Reset state
 		m.alertManageStep = 0
 		m.tagSelectCursor = 0
 		m.alertInput = ""
@@ -1401,7 +890,6 @@ func (m *Model) handleAlertEditThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cm
 		return m, nil
 
 	default:
-		// 只接受数字、小数点和负号
 		if len(msg.String()) == 1 {
 			char := msg.String()
 			if (char >= "0" && char <= "9") || char == "." || char == "-" {
@@ -1412,132 +900,58 @@ func (m *Model) handleAlertEditThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cm
 	}
 }
 
-// viewAlertEdit 渲染编辑告警界面
+// viewAlertEdit renders edit alert interface
 func (m *Model) viewAlertEdit() string {
-	s := "=== " + m.getText("alertEditTitle") + " ===\n\n"
-
-	s += fmt.Sprintf("%s: %s (%s)\n\n",
-		m.getText("alertStock"), m.currentAlert.StockName, m.currentAlert.StockCode)
-
-	// 复用 viewAlertAdd 的逻辑
-	switch m.alertManageStep {
-	case 0: // 选择类型
-		s += m.getText("alertSelectType") + "\n\n"
-
-		types := []string{
-			m.getText("alertTypePrice"),
-			m.getText("alertTypeRate"),
-			m.getText("alertTypeVolume"),
-		}
-
-		for i, typeText := range types {
-			prefix := "  "
-			if i == m.tagSelectCursor {
-				prefix = "► "
-			}
-			s += fmt.Sprintf("%s%s\n", prefix, typeText)
-		}
-
-		s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	case 1: // 选择条件
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n\n", m.getText("alertType"), typeText)
-		s += m.getText("alertSelectCondition") + "\n\n"
-
-		conditions := []string{
-			m.getText("alertConditionAbove"),
-			m.getText("alertConditionBelow"),
-			m.getText("alertConditionAboveEq"),
-			m.getText("alertConditionBelowEq"),
-		}
-
-		for i, condText := range conditions {
-			prefix := "  "
-			if i == m.tagSelectCursor {
-				prefix = "► "
-			}
-			s += fmt.Sprintf("%s%s\n", prefix, condText)
-		}
-
-		s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	case 2: // 输入阈值
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertType"), typeText)
-		s += fmt.Sprintf("%s: %s\n\n", m.getText("alertCondition"), m.selectedAlertCondition)
-
-		s += m.getText("alertInputThreshold") + "\n"
-		s += "┌────────────────────────────────────────────┐\n"
-		s += fmt.Sprintf("│ %-42s │\n", m.alertInput)
-		s += "└────────────────────────────────────────────┘\n\n"
-
-		s += m.getText("alertHelp.input") + "\n"
-	}
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderAlertAdd(alertui.AlertAddViewParams{
+		GetText:           m.getText,
+		StockCode:         m.currentAlert.StockCode,
+		StockName:         m.currentAlert.StockName,
+		Step:              m.alertManageStep,
+		TagSelectCursor:   m.tagSelectCursor,
+		SelectedAlertType: types.AlertType(m.selectedAlertType),
+		SelectedCondition: m.selectedAlertCondition,
+		AlertInput:        m.alertInput,
+		Message:           m.message,
+	})
 }
 
 // ============================================================================
 // Batch Alert State Handlers
 // ============================================================================
 
-// handleAlertBatchMethodSelect 处理批量添加方式选择
+// handleAlertBatchMethodSelect handles batch add method selection
 func (m *Model) handleAlertBatchMethodSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q", "m": // 返回告警管理
+	case "esc", "q", "m": // Return to alert management
 		m.state = AlertManage
 		m.message = ""
 		return m, nil
 
-	case "up", "k", "w": // 向上选择
+	case "up", "k", "w": // Scroll up
 		if m.batchSelectStep > 0 {
 			m.batchSelectStep--
 		}
 		return m, nil
 
-	case "down", "j", "s": // 向下选择
+	case "down", "j", "s": // Scroll down
 		if m.batchSelectStep < 2 {
 			m.batchSelectStep++
 		}
 		return m, nil
 
 	case "enter", " ":
-		// 根据选择的批量方式进入相应状态
 		switch m.batchSelectStep {
-		case 0: // 按标签添加
+		case 0: // Batch by tag
 			m.state = AlertBatchByTag
 			m.batchAlertTag = ""
 			m.tagManageCursor = 0
 
-		case 1: // 按市场添加
+		case 1: // Batch by market
 			m.state = AlertBatchByMarket
 			m.batchSelectedMarket = ""
 			m.marketCursor = 0
 
-		case 2: // 按股票列表添加
+		case 2: // Batch by stock list
 			m.state = SelectBatchStocks
 			m.batchSelectStep = 0
 		}
@@ -1548,58 +962,39 @@ func (m *Model) handleAlertBatchMethodSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd
 	}
 }
 
-// viewAlertBatchMethodSelect 渲染批量添加方式选择界面
+// viewAlertBatchMethodSelect renders batch method selection interface
 func (m *Model) viewAlertBatchMethodSelect() string {
-	s := "=== " + m.getText("alertBatchMethodTitle") + " ===\n\n"
-
-	options := []string{
-		m.getText("alertBatchByTag"),
-		m.getText("alertBatchByMarket"),
-		m.getText("alertBatchByStocks"),
-	}
-
-	for i, option := range options {
-		prefix := "  "
-		if i == m.batchSelectStep {
-			prefix = "► "
-		}
-		s += fmt.Sprintf("%s%d. %s\n", prefix, i+1, option)
-	}
-
-	s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderBatchMethodSelect(alertui.BatchMethodSelectViewParams{
+		GetText: m.getText,
+		Cursor:  m.batchSelectStep,
+		Message: m.message,
+	})
 }
 
-// handleAlertBatchByTag 处理按标签批量添加
+// handleAlertBatchByTag handles batch add by tag
 func (m *Model) handleAlertBatchByTag(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q", "m": // 返回方式选择
+	case "esc", "q", "m": // Return to method selection
 		m.state = AlertBatchMethodSelect
 		m.batchAlertTag = ""
 		return m, nil
 
-	case "up", "k", "w": // 向上选择
+	case "up", "k", "w": // Scroll up
 		if m.tagManageCursor > 0 {
 			m.tagManageCursor--
 		}
 		return m, nil
 
-	case "down", "j", "s": // 向下选择
+	case "down", "j", "s": // Scroll down
 		if m.tagManageCursor < len(m.availableTags)-1 {
 			m.tagManageCursor++
 		}
 		return m, nil
 
-	case "enter", " ": // 确认选择
+	case "enter", " ": // Confirm selection
 		if m.tagManageCursor < len(m.availableTags) {
 			m.batchAlertTag = m.availableTags[m.tagManageCursor]
 
-			// 获取该标签下的所有股票
 			m.batchSelectedStocks = m.getStocksByTag(m.batchAlertTag)
 
 			if len(m.batchSelectedStocks) == 0 {
@@ -1618,59 +1013,40 @@ func (m *Model) handleAlertBatchByTag(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// viewAlertBatchByTag 渲染按标签批量添加界面
+// viewAlertBatchByTag renders batch add by tag interface
 func (m *Model) viewAlertBatchByTag() string {
-	s := "=== " + m.getText("alertBatchByTagTitle") + " ===\n\n"
-	s += m.getText("alertSelectTagPrompt") + "\n\n"
-
-	if len(m.availableTags) == 0 {
-		s += m.getText("alertNoTagsAvailable") + "\n\n"
-		s += m.getText("alertHelp.back") + "\n"
-		return s
-	}
-
-	for i, tag := range m.availableTags {
-		prefix := "  "
-		if i == m.tagManageCursor {
-			prefix = "► "
-		}
-
-		// 统计该标签下的股票数量
-		stockCount := len(m.getStocksByTag(tag))
-		s += fmt.Sprintf("%s%s (%d %s)\n", prefix, tag, stockCount, m.getText("alertStocksCount"))
-	}
-
-	s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderBatchByTag(alertui.BatchByTagViewParams{
+		GetText:       m.getText,
+		AvailableTags: m.availableTags,
+		Cursor:        m.tagManageCursor,
+		Message:       m.message,
+		GetStockCount: func(tag string) int {
+			return len(m.getStocksByTag(tag))
+		},
+	})
 }
 
-// handleAlertBatchByMarket 处理按市场批量添加
+// handleAlertBatchByMarket handles batch add by market
 func (m *Model) handleAlertBatchByMarket(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q", "m": // 返回方式选择
+	case "esc", "q", "m": // Return to method selection
 		m.state = AlertBatchMethodSelect
 		m.batchSelectedMarket = ""
 		return m, nil
 
-	case "up", "k", "w": // 向上选择
+	case "up", "k", "w": // Scroll up
 		if m.marketCursor > 0 {
 			m.marketCursor--
 		}
 		return m, nil
 
-	case "down", "j", "s": // 向下选择
+	case "down", "j", "s": // Scroll down
 		if m.marketCursor < 2 {
 			m.marketCursor++
 		}
 		return m, nil
 
-	case "enter", " ": // 确认选择
-		// 根据选择的市场获取股票
+	case "enter", " ": // Confirm selection
 		var marketType MarketType
 		switch m.marketCursor {
 		case 0:
@@ -1681,7 +1057,6 @@ func (m *Model) handleAlertBatchByMarket(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			marketType = MarketHongKong
 		}
 
-		// 获取该市场下的所有股票(从自选和持股中)
 		m.batchSelectedStocks = m.getStocksByMarket(marketType)
 
 		if len(m.batchSelectedStocks) == 0 {
@@ -1699,46 +1074,23 @@ func (m *Model) handleAlertBatchByMarket(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// viewAlertBatchByMarket 渲染按市场批量添加界面
+// viewAlertBatchByMarket renders batch add by market interface
 func (m *Model) viewAlertBatchByMarket() string {
-	s := "=== " + m.getText("alertBatchByMarketTitle") + " ===\n\n"
-	s += m.getText("alertSelectMarketPrompt") + "\n\n"
-
-	markets := []struct {
-		name       string
-		marketType MarketType
-	}{
-		{m.getText("alertMarketChina"), MarketChina},
-		{m.getText("alertMarketUS"), MarketUS},
-		{m.getText("alertMarketHK"), MarketHongKong},
-	}
-
-	for i, market := range markets {
-		prefix := "  "
-		if i == m.marketCursor {
-			prefix = "► "
-		}
-
-		// 统计该市场的股票数量
-		stockCount := len(m.getStocksByMarket(market.marketType))
-		s += fmt.Sprintf("%s%s (%d %s)\n", prefix, market.name, stockCount, m.getText("alertStocksCount"))
-	}
-
-	s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderBatchByMarket(alertui.BatchByMarketViewParams{
+		GetText: m.getText,
+		Cursor:  m.marketCursor,
+		Message: m.message,
+		GetStockCount: func(marketType MarketType) int {
+			return len(m.getStocksByMarket(marketType))
+		},
+	})
 }
 
-// handleSelectBatchStocks 处理选择批量股票来源
+// handleSelectBatchStocks handles batch stock source selection
 func (m *Model) handleSelectBatchStocks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q", "m": // 返回
+	case "esc", "q", "m": // Return
 		if m.state == SelectBatchStocks && m.previousState != AlertManage {
-			// 如果从AlertManage进来的,返回AlertBatchMethodSelect
 			m.state = AlertBatchMethodSelect
 		} else {
 			m.state = AlertManage
@@ -1748,34 +1100,33 @@ func (m *Model) handleSelectBatchStocks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.batchCodeInput = ""
 		return m, nil
 
-	case "up", "k", "w": // 向上选择
+	case "up", "k", "w": // Scroll up
 		if m.batchSelectStep > 0 {
 			m.batchSelectStep--
 		}
 		return m, nil
 
-	case "down", "j", "s": // 向下选择
+	case "down", "j", "s": // Scroll down
 		if m.batchSelectStep < 2 {
 			m.batchSelectStep++
 		}
 		return m, nil
 
 	case "enter", " ":
-		// 根据选择的来源进入不同状态
 		switch m.batchSelectStep {
-		case 0: // 从自选列表选择
+		case 0: // From watchlist
 			m.state = SelectBatchFromWatchlist
 			m.batchStockSource = BatchSourceWatchlist
 			m.stockSelectionMap = make(map[string]bool)
 			m.watchlistCursor = 0
 
-		case 1: // 从持股列表选择
+		case 1: // From portfolio
 			m.state = SelectBatchFromPortfolio
 			m.batchStockSource = BatchSourcePortfolio
 			m.stockSelectionMap = make(map[string]bool)
 			m.portfolioCursor = 0
 
-		case 2: // 手动输入
+		case 2: // Manual input
 			m.state = InputBatchCodes
 			m.batchStockSource = BatchSourceManual
 			m.batchCodeInput = ""
@@ -1787,53 +1138,34 @@ func (m *Model) handleSelectBatchStocks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// viewSelectBatchStocks 渲染批量股票来源选择界面
+// viewSelectBatchStocks renders batch stock source selection interface
 func (m *Model) viewSelectBatchStocks() string {
-	s := "=== " + m.getText("alert.batch.byStocksTitle") + " ===\n\n"
-
-	options := []string{
-		m.getText("alert.batch.fromWatchlist"),
-		m.getText("alert.batch.fromPortfolio"),
-		m.getText("alert.batch.manualInput"),
-	}
-
-	for i, option := range options {
-		prefix := "  "
-		if i == m.batchSelectStep {
-			prefix = "► "
-		}
-		s += fmt.Sprintf("%s%d. %s\n", prefix, i+1, option)
-	}
-
-	s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderSelectBatchStocks(alertui.SelectBatchStocksViewParams{
+		GetText: m.getText,
+		Cursor:  m.batchSelectStep,
+		Message: m.message,
+	})
 }
 
-// handleSelectBatchFromWatchlist 处理从自选列表选择
+// handleSelectBatchFromWatchlist handles batch selection from watchlist
 func (m *Model) handleSelectBatchFromWatchlist(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.handleBatchStockSelection(msg, true)
 }
 
-// handleSelectBatchFromPortfolio 处理从持股列表选择
+// handleSelectBatchFromPortfolio handles batch selection from portfolio
 func (m *Model) handleSelectBatchFromPortfolio(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.handleBatchStockSelection(msg, false)
 }
 
-// handleBatchStockSelection 处理批量股票选择的通用逻辑
+// handleBatchStockSelection handles batch stock selection common logic
 func (m *Model) handleBatchStockSelection(msg tea.KeyMsg, isWatchlist bool) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q", "m": // 返回来源选择
+	case "esc", "q", "m": // Return to source selection
 		m.state = SelectBatchStocks
 		m.stockSelectionMap = make(map[string]bool)
 		return m, nil
 
-	case "enter": // 确认选择
-		// 收集选中的股票代码
+	case "enter": // Confirm selection
 		m.batchSelectedStocks = []string{}
 		for code, selected := range m.stockSelectionMap {
 			if selected {
@@ -1846,13 +1178,12 @@ func (m *Model) handleBatchStockSelection(msg tea.KeyMsg, isWatchlist bool) (tea
 			return m, nil
 		}
 
-		// 进入批量添加状态
 		m.state = AlertBatchAdd
 		m.alertManageStep = 0
 		m.tagSelectCursor = 0
 		return m, nil
 
-	case " ": // 切换选择状态
+	case " ": // Toggle selection
 		if isWatchlist {
 			filteredStocks := m.getFilteredWatchlist()
 			if m.watchlistCursor < len(filteredStocks) {
@@ -1869,7 +1200,7 @@ func (m *Model) handleBatchStockSelection(msg tea.KeyMsg, isWatchlist bool) (tea
 		}
 		return m, nil
 
-	case "up", "k", "w": // 向上导航
+	case "up", "k", "w": // Navigate up
 		if isWatchlist {
 			if m.watchlistCursor > 0 {
 				m.watchlistCursor--
@@ -1881,7 +1212,7 @@ func (m *Model) handleBatchStockSelection(msg tea.KeyMsg, isWatchlist bool) (tea
 		}
 		return m, nil
 
-	case "down", "j", "s": // 向下导航
+	case "down", "j", "s": // Navigate down
 		if isWatchlist {
 			filteredStocks := m.getFilteredWatchlist()
 			if m.watchlistCursor < len(filteredStocks)-1 {
@@ -1899,144 +1230,60 @@ func (m *Model) handleBatchStockSelection(msg tea.KeyMsg, isWatchlist bool) (tea
 	}
 }
 
-// viewSelectBatchFromWatchlist 渲染从自选列表选择界面
+// viewSelectBatchFromWatchlist renders watchlist batch selection interface
 func (m *Model) viewSelectBatchFromWatchlist() string {
-	s := "=== " + m.getText("alertSelectFromWatchlistTitle") + " ===\n\n"
-
 	filteredStocks := m.getFilteredWatchlist()
-	if len(filteredStocks) == 0 {
-		s += m.getText("emptyWatchlist") + "\n\n"
-		s += m.getText("alertHelp.back") + "\n"
-		return s
-	}
-
-	s += m.getText("alertMultiSelectPrompt") + "\n\n"
-
-	// 显示股票列表
-	maxLines := m.config.Display.MaxLines
-	startIndex := m.watchlistCursor
-	if startIndex > len(filteredStocks)-maxLines {
-		startIndex = len(filteredStocks) - maxLines
-		if startIndex < 0 {
-			startIndex = 0
-		}
-	}
-	endIndex := startIndex + maxLines
-	if endIndex > len(filteredStocks) {
-		endIndex = len(filteredStocks)
-	}
-
-	for i := startIndex; i < endIndex; i++ {
-		stock := filteredStocks[i]
-
-		// 选择标记
-		checkbox := "  "
-		if m.stockSelectionMap[stock.Code] {
-			checkbox = "✓ "
-		}
-
-		// 游标标记
-		cursor := " "
-		if i == m.watchlistCursor {
-			cursor = "►"
-		}
-
-		s += fmt.Sprintf("%s%s[%d] %s - %s\n", cursor, checkbox, i+1, stock.Code, stock.Name)
-	}
-
-	// 统计选中数量
-	selectedCount := 0
-	for _, selected := range m.stockSelectionMap {
-		if selected {
-			selectedCount++
+	stocks := make([]ui.SelectableStock, len(filteredStocks))
+	for i, s := range filteredStocks {
+		stocks[i] = ui.SelectableStock{
+			Code: s.Code,
+			Name: s.Name,
 		}
 	}
 
-	s += fmt.Sprintf("\n%s: %d %s\n\n", m.getText("alertSelectedCount"), selectedCount, m.getText("alertStocksCount"))
-	s += m.getText("alert.batch.multiSelectHelp") + "\n"
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderBatchStockList(alertui.BatchStockListViewParams{
+		GetText:         m.getText,
+		Config:          m.config,
+		Stocks:          stocks,
+		Cursor:          m.watchlistCursor,
+		SelectionMap:    m.stockSelectionMap,
+		Message:         m.message,
+		IsFromWatchlist: true,
+	})
 }
 
-// viewSelectBatchFromPortfolio 渲染从持股列表选择界面
+// viewSelectBatchFromPortfolio renders portfolio batch selection interface
 func (m *Model) viewSelectBatchFromPortfolio() string {
-	s := "=== " + m.getText("alertSelectFromPortfolioTitle") + " ===\n\n"
-
-	if len(m.portfolio.Stocks) == 0 {
-		s += m.getText("emptyPortfolio") + "\n\n"
-		s += m.getText("alertHelp.back") + "\n"
-		return s
-	}
-
-	s += m.getText("alertMultiSelectPrompt") + "\n\n"
-
-	// 显示股票列表
-	maxLines := m.config.Display.MaxLines
-	startIndex := m.portfolioCursor
-	if startIndex > len(m.portfolio.Stocks)-maxLines {
-		startIndex = len(m.portfolio.Stocks) - maxLines
-		if startIndex < 0 {
-			startIndex = 0
-		}
-	}
-	endIndex := startIndex + maxLines
-	if endIndex > len(m.portfolio.Stocks) {
-		endIndex = len(m.portfolio.Stocks)
-	}
-
-	for i := startIndex; i < endIndex; i++ {
-		stock := m.portfolio.Stocks[i]
-
-		// 选择标记
-		checkbox := "  "
-		if m.stockSelectionMap[stock.Code] {
-			checkbox = "✓ "
-		}
-
-		// 游标标记
-		cursor := " "
-		if i == m.portfolioCursor {
-			cursor = "►"
-		}
-
-		s += fmt.Sprintf("%s%s[%d] %s - %s (%d%s, %s%.2f)\n",
-			cursor, checkbox, i+1, stock.Code, stock.Name,
-			stock.Quantity, m.getText("alertSharesUnit"),
-			m.getText("alertCostLabel"), stock.CostPrice)
-	}
-
-	// 统计选中数量
-	selectedCount := 0
-	for _, selected := range m.stockSelectionMap {
-		if selected {
-			selectedCount++
+	stocks := make([]ui.SelectableStock, len(m.portfolio.Stocks))
+	for i, s := range m.portfolio.Stocks {
+		stocks[i] = ui.SelectableStock{
+			Code:      s.Code,
+			Name:      s.Name,
+			Quantity:  s.Quantity,
+			CostPrice: s.CostPrice,
 		}
 	}
 
-	s += fmt.Sprintf("\n%s: %d %s\n\n", m.getText("alertSelectedCount"), selectedCount, m.getText("alertStocksCount"))
-	s += m.getText("alert.batch.multiSelectHelp") + "\n"
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderBatchStockList(alertui.BatchStockListViewParams{
+		GetText:         m.getText,
+		Config:          m.config,
+		Stocks:          stocks,
+		Cursor:          m.portfolioCursor,
+		SelectionMap:    m.stockSelectionMap,
+		Message:         m.message,
+		IsFromWatchlist: false,
+	})
 }
 
-// handleInputBatchCodes 处理手动输入股票代码
+// handleInputBatchCodes handles manual stock code input
 func (m *Model) handleInputBatchCodes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q", "m": // 返回来源选择
+	case "esc", "q", "m": // Return to source selection
 		m.state = SelectBatchStocks
 		m.batchCodeInput = ""
 		return m, nil
 
-	case "enter": // 确认输入
-		// 解析股票代码
+	case "enter": // Confirm input
 		codes := parseStockCodes(m.batchCodeInput)
 		if len(codes) == 0 {
 			m.message = m.getText("alertBatchInvalidCodes")
@@ -2056,7 +1303,6 @@ func (m *Model) handleInputBatchCodes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		// 接受所有字符(包括逗号和换行)
 		if len(msg.String()) == 1 {
 			m.batchCodeInput += msg.String()
 		}
@@ -2064,58 +1310,37 @@ func (m *Model) handleInputBatchCodes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// viewInputBatchCodes 渲染手动输入股票代码界面
+// viewInputBatchCodes renders manual code input interface
 func (m *Model) viewInputBatchCodes() string {
-	s := "=== " + m.getText("alertInputCodesTitle") + " ===\n\n"
-	s += m.getText("alertInputCodesPrompt") + "\n\n"
-
-	s += "┌────────────────────────────────────────────┐\n"
-	// 显示输入内容(支持多行)
-	lines := strings.Split(m.batchCodeInput, "\n")
-	displayLines := 5
-	for i := 0; i < displayLines; i++ {
-		line := ""
-		if i < len(lines) {
-			line = lines[i]
-		}
-		s += fmt.Sprintf("│ %-42s │\n", line)
-	}
-	s += "└────────────────────────────────────────────┘\n\n"
-
-	s += m.getText("alertInputCodesExample") + "\n\n"
-	s += m.getText("alertHelp.input") + "\n"
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderInputBatchCodes(alertui.InputBatchCodesViewParams{
+		GetText: m.getText,
+		Input:   m.batchCodeInput,
+		Message: m.message,
+	})
 }
 
-// handleAlertBatchAdd 处理批量添加告警(设置规则)
+// handleAlertBatchAdd handles batch add alert (set rules)
 func (m *Model) handleAlertBatchAdd(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// 复用单股票添加的步骤逻辑
 	switch m.alertManageStep {
-	case 0: // 选择告警类型
+	case 0: // Select alert type
 		return m.handleBatchAlertTypeSelect(msg)
-	case 1: // 选择条件
+	case 1: // Select condition
 		return m.handleBatchAlertConditionSelect(msg)
-	case 2: // 输入阈值
+	case 2: // Input threshold
 		return m.handleBatchAlertThresholdInput(msg)
-	case 3: // 选择触发频率
+	case 3: // Select trigger frequency
 		return m.handleBatchAlertFrequencySelect(msg)
-	case 4: // 输入自定义天数
+	case 4: // Input custom days
 		return m.handleBatchAlertFrequencyDaysInput(msg)
 	default:
 		return m, nil
 	}
 }
 
-// handleBatchAlertTypeSelect 处理批量告警类型选择
+// handleBatchAlertTypeSelect handles batch alert type selection
 func (m *Model) handleBatchAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回
-		// 返回到上一个状态
+	case "esc", "q": // Return
 		m.state = AlertBatchMethodSelect
 		m.message = ""
 		return m, nil
@@ -2133,10 +1358,7 @@ func (m *Model) handleBatchAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 
 	case "enter", " ":
-		// 设置告警类型
 		m.selectedAlertType = GetAlertTypeFromCursor(m.tagSelectCursor)
-
-		// 进入条件选择
 		m.alertManageStep = 1
 		m.tagSelectCursor = 0
 		return m, nil
@@ -2146,10 +1368,10 @@ func (m *Model) handleBatchAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	}
 }
 
-// handleBatchAlertConditionSelect 处理批量告警条件选择
+// handleBatchAlertConditionSelect handles batch alert condition selection
 func (m *Model) handleBatchAlertConditionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回上一步
+	case "esc", "q": // Return to previous step
 		m.alertManageStep = 0
 		m.tagSelectCursor = 0
 		return m, nil
@@ -2167,10 +1389,7 @@ func (m *Model) handleBatchAlertConditionSelect(msg tea.KeyMsg) (tea.Model, tea.
 		return m, nil
 
 	case "enter", " ":
-		// 设置条件
 		m.selectedAlertCondition = GetAlertConditionFromCursor(m.tagSelectCursor)
-
-		// 进入阈值输入
 		m.alertManageStep = 2
 		m.alertInput = ""
 		m.alertInputCursor = 0
@@ -2181,16 +1400,15 @@ func (m *Model) handleBatchAlertConditionSelect(msg tea.KeyMsg) (tea.Model, tea.
 	}
 }
 
-// handleBatchAlertThresholdInput 处理批量告警阈值输入
+// handleBatchAlertThresholdInput handles batch alert threshold input
 func (m *Model) handleBatchAlertThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q": // 返回上一步
+	case "esc", "q": // Return to previous step
 		m.alertManageStep = 1
 		m.tagSelectCursor = 0
 		return m, nil
 
 	case "enter":
-		// 验证输入
 		var threshold float64
 		_, err := fmt.Sscanf(m.alertInput, "%f", &threshold)
 		if err != nil || m.alertInput == "" {
@@ -2198,9 +1416,8 @@ func (m *Model) handleBatchAlertThresholdInput(msg tea.KeyMsg) (tea.Model, tea.C
 			return m, nil
 		}
 
-		// 保存阈值，进入频率选择步骤
 		m.alertThreshold = threshold
-		m.alertManageStep = 3 // 进入频率选择
+		m.alertManageStep = 3
 		m.alertFrequencyCursor = 0
 		m.selectedAlertFrequency = ""
 		return m, nil
@@ -2212,7 +1429,6 @@ func (m *Model) handleBatchAlertThresholdInput(msg tea.KeyMsg) (tea.Model, tea.C
 		return m, nil
 
 	default:
-		// 只接受数字、小数点和负号
 		if len(msg.String()) == 1 {
 			char := msg.String()
 			if (char >= "0" && char <= "9") || char == "." || char == "-" {
@@ -2223,171 +1439,25 @@ func (m *Model) handleBatchAlertThresholdInput(msg tea.KeyMsg) (tea.Model, tea.C
 	}
 }
 
-// viewAlertBatchAdd 渲染批量添加告警界面
+// viewAlertBatchAdd renders batch add alert interface
 func (m *Model) viewAlertBatchAdd() string {
-	s := "=== " + m.getText("alertBatchAddTitle") + " ===\n\n"
-
-	s += fmt.Sprintf("%s: %d %s\n\n",
-		m.getText("alertBatchStockCount"),
-		len(m.batchSelectedStocks),
-		m.getText("alertStocksCount"))
-
-	// 显示前5只股票作为示例
-	previewCount := 5
-	if len(m.batchSelectedStocks) < previewCount {
-		previewCount = len(m.batchSelectedStocks)
-	}
-	for i := 0; i < previewCount; i++ {
-		s += fmt.Sprintf("  [%d] %s\n", i+1, m.batchSelectedStocks[i])
-	}
-	if len(m.batchSelectedStocks) > previewCount {
-		s += fmt.Sprintf("  ... (%s %d %s)\n",
-			m.getText("alertAndMore"),
-			len(m.batchSelectedStocks)-previewCount,
-			m.getText("alertStocksCount"))
-	}
-	s += "\n"
-
-	// 复用单股票添加的UI
-	switch m.alertManageStep {
-	case 0: // 选择类型
-		s += m.getText("alertSelectType") + "\n\n"
-
-		types := []string{
-			m.getText("alertTypePrice"),
-			m.getText("alertTypeRate"),
-			m.getText("alertTypeVolume"),
-		}
-
-		for i, typeText := range types {
-			prefix := "  "
-			if i == m.tagSelectCursor {
-				prefix = "► "
-			}
-			s += fmt.Sprintf("%s%s\n", prefix, typeText)
-		}
-
-		s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	case 1: // 选择条件
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n\n", m.getText("alertType"), typeText)
-		s += m.getText("alertSelectCondition") + "\n\n"
-
-		conditions := []string{
-			m.getText("alertConditionAbove"),
-			m.getText("alertConditionBelow"),
-			m.getText("alertConditionAboveEq"),
-			m.getText("alertConditionBelowEq"),
-		}
-
-		for i, condText := range conditions {
-			prefix := "  "
-			if i == m.tagSelectCursor {
-				prefix = "► "
-			}
-			s += fmt.Sprintf("%s%s\n", prefix, condText)
-		}
-
-		s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	case 2: // 输入阈值
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertType"), typeText)
-		s += fmt.Sprintf("%s: %s\n\n", m.getText("alertCondition"), m.selectedAlertCondition)
-
-		s += m.getText("alertInputThreshold") + "\n"
-		s += "┌────────────────────────────────────────────┐\n"
-		s += fmt.Sprintf("│ %-42s │\n", m.alertInput)
-		s += "└────────────────────────────────────────────┘\n\n"
-
-		s += m.getText("alertHelp.input") + "\n"
-
-	case 3: // 选择触发频率 (批量添加)
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertType"), typeText)
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertCondition"), m.selectedAlertCondition)
-		s += fmt.Sprintf("%s: %.2f\n\n", m.getText("alert.threshold"), m.alertThreshold)
-
-		s += m.getText("alert.selectFrequency") + "\n\n"
-
-		frequencyTexts := []string{
-			m.getText("alert.frequency.once"),
-			m.getText("alert.frequency.daily"),
-			m.getText("alert.frequency.weekly"),
-			m.getText("alert.frequency.monthly"),
-			m.getText("alert.frequency.everyNDays.option"),
-		}
-
-		for i, freqText := range frequencyTexts {
-			prefix := "  "
-			if i == m.alertFrequencyCursor {
-				prefix = "► "
-			}
-			s += fmt.Sprintf("%s%s\n", prefix, freqText)
-		}
-
-		s += "\n" + m.getText("alertHelp.select") + "\n"
-
-	case 4: // 输入自定义天数 (批量添加)
-		typeText := ""
-		switch m.selectedAlertType {
-		case AlertTypePrice:
-			typeText = m.getText("alertTypePrice")
-		case AlertTypeRate:
-			typeText = m.getText("alertTypeRate")
-		case AlertTypeVolume:
-			typeText = m.getText("alertTypeVolume")
-		}
-
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertType"), typeText)
-		s += fmt.Sprintf("%s: %s\n", m.getText("alertCondition"), m.selectedAlertCondition)
-		s += fmt.Sprintf("%s: %.2f\n", m.getText("alert.threshold"), m.alertThreshold)
-		s += fmt.Sprintf("%s: %s\n\n", m.getText("alert.frequency"), m.getText("alert.frequency.everyNDays.option"))
-
-		s += m.getText("alert.frequency.enterDays") + "\n"
-		s += "┌────────────────────────────────────────────┐\n"
-		s += fmt.Sprintf("│ %-42s │\n", m.alertInput)
-		s += "└────────────────────────────────────────────┘\n\n"
-
-		s += m.getText("alertHelp.input") + "\n"
-	}
-
-	if m.message != "" {
-		s += "\n" + m.message + "\n"
-	}
-
-	return s
+	return alertui.RenderBatchAdd(alertui.BatchAddViewParams{
+		AlertAddViewParams: alertui.AlertAddViewParams{
+			GetText:              m.getText,
+			Step:                 m.alertManageStep,
+			TagSelectCursor:      m.tagSelectCursor,
+			SelectedAlertType:    types.AlertType(m.selectedAlertType),
+			SelectedCondition:    m.selectedAlertCondition,
+			AlertThreshold:       m.alertThreshold,
+			AlertInput:           m.alertInput,
+			AlertFrequencyCursor: m.alertFrequencyCursor,
+			Message:              m.message,
+		},
+		SelectedStocks: m.batchSelectedStocks,
+	})
 }
 
-// handleBatchAlertFrequencySelect 处理批量告警频率选择
+// handleBatchAlertFrequencySelect handles batch alert frequency selection
 func (m *Model) handleBatchAlertFrequencySelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	frequencyOptions := getFrequencyOptions()
 
@@ -2426,7 +1496,7 @@ func (m *Model) handleBatchAlertFrequencySelect(msg tea.KeyMsg) (tea.Model, tea.
 	}
 }
 
-// handleBatchAlertFrequencyDaysInput 处理批量告警自定义天数输入
+// handleBatchAlertFrequencyDaysInput handles batch alert custom days input
 func (m *Model) handleBatchAlertFrequencyDaysInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
@@ -2461,7 +1531,7 @@ func (m *Model) handleBatchAlertFrequencyDaysInput(msg tea.KeyMsg) (tea.Model, t
 	}
 }
 
-// createBatchAlertsWithFrequency 使用选定的频率批量创建告警
+// createBatchAlertsWithFrequency creates batch alerts with selected frequency
 func (m *Model) createBatchAlertsWithFrequency() (tea.Model, tea.Cmd) {
 	addedCount := 0
 	for _, code := range m.batchSelectedStocks {

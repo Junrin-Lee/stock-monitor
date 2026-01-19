@@ -1,415 +1,205 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
 	"stock-monitor/internal/api"
-
-	"gopkg.in/yaml.v3"
+	"stock-monitor/internal/data"
+	"stock-monitor/internal/types"
 )
 
 // ============================================================================
-// Portfolio 持仓数据持久化
+// Portfolio 持仓数据持久化（适配器方法）
 // ============================================================================
 
-// savePortfolio 保存持仓数据到文件
+// savePortfolio 保存持仓数据到文件（使用 internal/data）
 func (m *Model) savePortfolio() {
-	data, err := json.MarshalIndent(m.portfolio, "", "  ")
-	if err != nil {
-		return
+	// 转换为 types.Portfolio
+	portfolio := types.Portfolio{
+		Stocks: convertStocksToTypes(m.portfolio.Stocks),
 	}
-	os.WriteFile(dataFile, data, 0644)
+	data.SavePortfolio(portfolio)
 }
 
-// loadPortfolio 从文件加载持仓数据
+// loadPortfolio 从文件加载持仓数据（使用 internal/data）
 func loadPortfolio() Portfolio {
-	data, err := os.ReadFile(dataFile)
-	if err != nil {
-		return Portfolio{Stocks: []Stock{}}
+	portfolio := data.LoadPortfolio()
+	return Portfolio{
+		Stocks: convertStocksFromTypes(portfolio.Stocks),
 	}
+}
 
-	var portfolio Portfolio
-	err = json.Unmarshal(data, &portfolio)
-	if err != nil {
-		return Portfolio{Stocks: []Stock{}}
+// convertStocksToTypes 将 main.Stock 转换为 types.Stock
+func convertStocksToTypes(stocks []Stock) []types.Stock {
+	result := make([]types.Stock, len(stocks))
+	for i, s := range stocks {
+		result[i] = types.Stock{
+			Code:          s.Code,
+			Name:          s.Name,
+			Price:         s.Price,
+			CostPrice:     s.CostPrice,
+			Quantity:      s.Quantity,
+			Change:        s.Change,
+			ChangePercent: s.ChangePercent,
+			StartPrice:    s.StartPrice,
+			MaxPrice:      s.MaxPrice,
+			MinPrice:      s.MinPrice,
+			PrevClose:     s.PrevClose,
+		}
 	}
-	return portfolio
+	return result
+}
+
+// convertStocksFromTypes 将 types.Stock 转换为 main.Stock
+func convertStocksFromTypes(stocks []types.Stock) []Stock {
+	result := make([]Stock, len(stocks))
+	for i, s := range stocks {
+		result[i] = Stock{
+			Code:          s.Code,
+			Name:          s.Name,
+			Price:         s.Price,
+			CostPrice:     s.CostPrice,
+			Quantity:      s.Quantity,
+			Change:        s.Change,
+			ChangePercent: s.ChangePercent,
+			StartPrice:    s.StartPrice,
+			MaxPrice:      s.MaxPrice,
+			MinPrice:      s.MinPrice,
+			PrevClose:     s.PrevClose,
+		}
+	}
+	return result
 }
 
 // ============================================================================
-// Watchlist 自选股数据持久化
+// Watchlist 自选股数据持久化（适配器方法）
 // ============================================================================
 
-// WatchlistStockLegacy 旧版自选股数据结构（用于迁移兼容）
-type WatchlistStockLegacy struct {
-	Code   string     `json:"code"`
-	Name   string     `json:"name"`
-	Tag    string     `json:"tag,omitempty"`    // 旧格式的单个标签
-	Tags   []string   `json:"tags,omitempty"`   // 新格式的多个标签
-	Market MarketType `json:"market,omitempty"` // 市场类型（用于兼容已有market字段的数据）
-}
-
-// WatchlistLegacy 旧版自选股列表（用于迁移兼容）
-type WatchlistLegacy struct {
-	Stocks []WatchlistStockLegacy `json:"stocks"`
-}
-
-// loadWatchlist 加载自选股票列表（支持旧格式迁移）
+// loadWatchlist 加载自选股票列表（使用 internal/data）
 func loadWatchlist() Watchlist {
-	data, err := os.ReadFile(watchlistFile)
-	if err != nil {
-		return Watchlist{Stocks: []WatchlistStock{}}
+	watchlist := data.LoadWatchlist(api.GetMarketType, isMarketTag)
+	return Watchlist{
+		Stocks: convertWatchlistStocksFromTypes(watchlist.Stocks),
 	}
-
-	// 先尝试用兼容性结构体加载数据
-	var legacyWatchlist WatchlistLegacy
-	err = json.Unmarshal(data, &legacyWatchlist)
-	if err != nil {
-		return Watchlist{Stocks: []WatchlistStock{}}
-	}
-
-	// 转换为新格式
-	var watchlist Watchlist
-	for _, legacyStock := range legacyWatchlist.Stocks {
-		newStock := WatchlistStock{
-			Code: legacyStock.Code,
-			Name: legacyStock.Name,
-		}
-
-		// 处理市场字段的兼容性
-		if legacyStock.Market == "" {
-			// 自动识别市场类型
-			newStock.Market = api.GetMarketType(legacyStock.Code)
-		} else {
-			newStock.Market = legacyStock.Market
-		}
-
-		// 处理标签字段的兼容性并清理市场标签
-		var userTags []string
-		if len(legacyStock.Tags) > 0 {
-			// 新格式：过滤掉市场标签，只保留用户自定义标签
-			for _, tag := range legacyStock.Tags {
-				if tag != "" && tag != "-" && !isMarketTag(tag) {
-					userTags = append(userTags, tag)
-				}
-			}
-			newStock.Tags = userTags
-		} else if legacyStock.Tag != "" {
-			// 旧格式：将单个 Tag 转换为 Tags 数组（如果不是市场标签）
-			if !isMarketTag(legacyStock.Tag) && legacyStock.Tag != "-" {
-				newStock.Tags = []string{legacyStock.Tag}
-			} else {
-				newStock.Tags = []string{}
-			}
-		} else {
-			// 没有标签：使用空数组
-			newStock.Tags = []string{}
-		}
-
-		watchlist.Stocks = append(watchlist.Stocks, newStock)
-	}
-
-	return watchlist
 }
 
-// saveWatchlist 保存自选股票列表
+// saveWatchlist 保存自选股票列表（使用 internal/data）
 func (m *Model) saveWatchlist() {
-	data, err := json.MarshalIndent(m.watchlist, "", "  ")
-	if err != nil {
-		return
+	watchlist := types.Watchlist{
+		Stocks: convertWatchlistStocksToTypes(m.watchlist.Stocks),
 	}
-	os.WriteFile(watchlistFile, data, 0644)
+	data.SaveWatchlist(watchlist)
+}
+
+// convertWatchlistStocksToTypes 将 main.WatchlistStock 转换为 types.WatchlistStock
+func convertWatchlistStocksToTypes(stocks []WatchlistStock) []types.WatchlistStock {
+	result := make([]types.WatchlistStock, len(stocks))
+	for i, s := range stocks {
+		result[i] = types.WatchlistStock{
+			Code:   s.Code,
+			Name:   s.Name,
+			Tags:   s.Tags,
+			Market: s.Market,
+		}
+	}
+	return result
+}
+
+// convertWatchlistStocksFromTypes 将 types.WatchlistStock 转换为 main.WatchlistStock
+func convertWatchlistStocksFromTypes(stocks []types.WatchlistStock) []WatchlistStock {
+	result := make([]WatchlistStock, len(stocks))
+	for i, s := range stocks {
+		result[i] = WatchlistStock{
+			Code:   s.Code,
+			Name:   s.Name,
+			Tags:   s.Tags,
+			Market: s.Market,
+		}
+	}
+	return result
 }
 
 // ============================================================================
-// Config 配置文件持久化
+// Config 配置文件持久化（适配器方法）
 // ============================================================================
 
-// defaultMarketsConfig 获取默认的市场配置
-func defaultMarketsConfig() MarketsConfig {
-	return MarketsConfig{
-		China: MarketConfig{
-			Timezone: "Asia/Shanghai",
-			TradingSessions: []TradingSession{
-				{StartTime: "09:30", EndTime: "11:30"},
-				{StartTime: "13:00", EndTime: "15:00"},
-			},
-			Weekdays: []int{1, 2, 3, 4, 5},
-		},
-		US: MarketConfig{
-			Timezone: "America/New_York",
-			TradingSessions: []TradingSession{
-				{StartTime: "09:30", EndTime: "16:00"},
-			},
-			Weekdays: []int{1, 2, 3, 4, 5},
-		},
-		HongKong: MarketConfig{
-			Timezone: "Asia/Hong_Kong",
-			TradingSessions: []TradingSession{
-				{StartTime: "09:30", EndTime: "12:00"},
-				{StartTime: "13:00", EndTime: "16:00"},
-			},
-			Weekdays: []int{1, 2, 3, 4, 5},
-		},
-	}
-}
-
-// getDefaultConfig 获取默认配置
-func getDefaultConfig() Config {
-	return Config{
-		System: SystemConfig{
-			Language:      "en",        // 默认英文
-			AutoStart:     true,        // 有数据时自动进入监控模式
-			StartupModule: "portfolio", // 默认启动持股模块
-			LogLevel:      "info",      // 默认日志级别
-		},
-		Display: DisplayConfig{
-			ColorScheme:        "professional", // 专业配色方案
-			DecimalPlaces:      3,              // 3位小数
-			TableStyle:         "light",        // 轻量表格样式
-			MaxLines:           10,             // 默认每页显示10行
-			PortfolioHighlight: "yellow",       // 默认黄色
-			// 持股列表默认显示所有列（按当前顺序）
-			PortfolioColumns: []string{
-				"cursor", "code", "name", "prev_close", "open", "high",
-				"low", "price", "cost", "quantity", "today_change",
-				"position_profit", "profit_rate", "market_value",
-			},
-			// 自选列表默认显示所有列（按当前顺序）
-			WatchlistColumns: []string{
-				"cursor", "tag", "code", "name", "price", "prev_close",
-				"open", "high", "low", "today_change", "turnover", "volume",
-			},
-		},
-		Update: UpdateConfig{
-			RefreshInterval: 5,    // 5秒刷新间隔
-			AutoUpdate:      true, // 自动更新开启
-		},
-		Markets: defaultMarketsConfig(), // 市场配置
-		IntradayCollection: IntradayCollectionConfig{
-			EnableAutoStop:        true, // 启用自动停止
-			CompletenessThreshold: 90.0, // 90% 完整性阈值
-			MaxConsecutiveErrors:  5,    // 最大连续错误5次
-			MinDatapoints:         20,   // 最小数据点20个
-		},
-	}
-}
-
-// loadConfig 加载配置文件
+// loadConfig 加载配置文件（使用 internal/data）
 func loadConfig() Config {
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		// 如果配置文件不存在，创建默认配置文件
-		config := getDefaultConfig()
-		saveConfig(config)
-		return config
-	}
-
-	var config Config
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
-		// 如果配置文件格式错误，使用默认配置
-		return getDefaultConfig()
-	}
-
-	// 验证配置的合理性
-	if config.Display.MaxLines <= 0 || config.Display.MaxLines > 50 {
-		config.Display.MaxLines = 10 // 默认值
-	}
-
-	// 验证并设置高亮颜色的默认值
-	if config.Display.PortfolioHighlight == "" {
-		config.Display.PortfolioHighlight = "yellow" // 默认黄色背景
-		logDebug("log.config.defaultHighlight", config.Display.PortfolioHighlight)
-	} else {
-		logDebug("log.config.loadedHighlight", config.Display.PortfolioHighlight)
-	}
-
-	// 如果 Markets 为空，填充默认值（向后兼容）
-	if config.Markets.China.Timezone == "" {
-		config.Markets = defaultMarketsConfig()
-		logDebug("log.config.defaultMarkets", "填充默认市场配置")
-	}
-
-	// 向后兼容：如果列配置为空，使用默认值
-	if len(config.Display.PortfolioColumns) == 0 {
-		config.Display.PortfolioColumns = getDefaultConfig().Display.PortfolioColumns
-		logDebug("log.config.defaultPortfolioColumns", "使用默认持股列表列配置")
-	}
-	if len(config.Display.WatchlistColumns) == 0 {
-		config.Display.WatchlistColumns = getDefaultConfig().Display.WatchlistColumns
-		logDebug("log.config.defaultWatchlistColumns", "使用默认自选列表列配置")
-	}
-
-	// 验证列配置
-	config.Display.PortfolioColumns = validatePortfolioColumns(config.Display.PortfolioColumns)
-	config.Display.WatchlistColumns = validateWatchlistColumns(config.Display.WatchlistColumns)
-
-	return config
+	// 直接使用 internal/data 的类型，因为 Config 已经是类型别名
+	return data.LoadConfig()
 }
 
-// saveConfig 保存配置文件
+// saveConfig 保存配置文件（使用 internal/data）
 func saveConfig(config Config) error {
-	data, err := yaml.Marshal(config)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configFile, data, 0644)
-}
-
-// validatePortfolioColumns - 验证Portfolio列配置
-func validatePortfolioColumns(configured []string) []string {
-	required := []string{"cursor", "code", "name", "price"}
-	valid := map[string]bool{
-		"cursor": true, "code": true, "name": true, "prev_close": true,
-		"open": true, "high": true, "low": true, "price": true,
-		"cost": true, "quantity": true, "today_change": true,
-		"position_profit": true, "profit_rate": true, "market_value": true,
-	}
-
-	return smartMergeRequiredColumns(configured, required, valid)
-}
-
-// validateWatchlistColumns - 验证Watchlist列配置
-func validateWatchlistColumns(configured []string) []string {
-	required := []string{"cursor", "tag", "code", "name", "price"}
-	valid := map[string]bool{
-		"cursor": true, "tag": true, "code": true, "name": true,
-		"price": true, "prev_close": true, "open": true, "high": true,
-		"low": true, "today_change": true, "turnover": true, "volume": true,
-	}
-
-	return smartMergeRequiredColumns(configured, required, valid)
-}
-
-// smartMergeRequiredColumns - 智能合并必须列
-// 算法：在保留用户配置顺序的同时，智能插入缺失的必须列
-func smartMergeRequiredColumns(userConfig []string, required []string, valid map[string]bool) []string {
-	result := []string{}
-	inserted := make(map[string]bool)
-
-	// 第一步：添加用户配置的有效列
-	for _, col := range userConfig {
-		if valid[col] {
-			result = append(result, col)
-			inserted[col] = true
-		} else {
-			// 静默忽略无效列ID，在debug模式下记录
-			logDebug("log.config.invalidColumn", col)
-		}
-	}
-
-	// 第二步：收集缺失的必须列
-	missingRequired := []string{}
-	for _, req := range required {
-		if !inserted[req] {
-			missingRequired = append(missingRequired, req)
-		}
-	}
-
-	// 第三步：智能插入缺失的必须列
-	// 策略：在第一个用户配置列之后插入，如果用户配置为空则放在最前面
-	if len(missingRequired) > 0 {
-		insertPosition := 0
-		if len(result) > 0 {
-			insertPosition = 1 // 在第一列之后插入
-		}
-		result = insertAt(result, insertPosition, missingRequired...)
-	}
-
-	// 如果结果为空（用户配置为空且无必须列），返回必须列
-	if len(result) == 0 {
-		return required
-	}
-
-	return result
-}
-
-// insertAt - 在指定位置插入元素
-func insertAt(slice []string, index int, values ...string) []string {
-	// 确保index在有效范围内
-	if index < 0 {
-		index = 0
-	}
-	if index > len(slice) {
-		index = len(slice)
-	}
-
-	// 创建新切片
-	result := make([]string, 0, len(slice)+len(values))
-	result = append(result, slice[:index]...)
-	result = append(result, values...)
-	result = append(result, slice[index:]...)
-	return result
-}
-
-// contains - 检查字符串切片是否包含指定字符串
-func contains(slice []string, str string) bool {
-	for _, s := range slice {
-		if s == str {
-			return true
-		}
-	}
-	return false
+	return data.SaveConfig(config)
 }
 
 // ============================================================================
-// Alert 告警数据持久化
+// Alert 告警数据持久化（适配器方法）
 // ============================================================================
 
-// migrateAlertFrequency 迁移告警频率数据（向后兼容）
-// 确保旧数据的 Frequency 字段有有效值
-func migrateAlertFrequency(alerts []Alert) []Alert {
-	for i, alert := range alerts {
-		// 如果 Frequency 未设置，默认为一次性告警
-		if alert.Frequency == "" {
-			alerts[i].Frequency = TriggerOnce
-		}
-		// 确保 FrequencyDays 有有效默认值
-		if alert.Frequency == TriggerEveryNDays && alert.FrequencyDays <= 0 {
-			alerts[i].FrequencyDays = 1
-		}
-	}
-	return alerts
-}
-
-// loadAlertData 从文件加载告警数据
+// loadAlertData 从文件加载告警数据（使用 internal/data）
 func loadAlertData() AlertData {
-	data, err := os.ReadFile(alertFile)
-	if err != nil {
-		return AlertData{
-			Alerts:     []Alert{},
-			LastCheck:  "",
-			AlertCount: 0,
-		}
+	alertData := data.LoadAlertData()
+	return AlertData{
+		Alerts:     convertAlertsFromTypes(alertData.Alerts),
+		LastCheck:  alertData.LastCheck,
+		AlertCount: alertData.AlertCount,
 	}
-
-	var alertData AlertData
-	err = json.Unmarshal(data, &alertData)
-	if err != nil {
-		return AlertData{
-			Alerts:     []Alert{},
-			LastCheck:  "",
-			AlertCount: 0,
-		}
-	}
-
-	// 迁移旧数据到新的频率格式
-	alertData.Alerts = migrateAlertFrequency(alertData.Alerts)
-
-	return alertData
 }
 
-// saveAlertData 保存告警数据到文件
+// saveAlertData 保存告警数据到文件（使用 internal/data）
 func (m *Model) saveAlertData() {
-	m.alertData.AlertCount = len(m.alertData.Alerts)
-	data, err := json.MarshalIndent(m.alertData, "", "  ")
-	if err != nil {
+	alertData := types.AlertData{
+		Alerts:     convertAlertsToTypes(m.alertData.Alerts),
+		LastCheck:  m.alertData.LastCheck,
+		AlertCount: m.alertData.AlertCount,
+	}
+	if err := data.SaveAlertData(alertData); err != nil {
 		logError("log.alert.saveFailed", err)
-		return
 	}
-	err = os.WriteFile(alertFile, data, 0644)
-	if err != nil {
-		logError("log.alert.writeFileFailed", err)
+}
+
+// convertAlertsToTypes 将 main.Alert 转换为 types.Alert
+func convertAlertsToTypes(alerts []Alert) []types.Alert {
+	result := make([]types.Alert, len(alerts))
+	for i, a := range alerts {
+		result[i] = types.Alert{
+			ID:            a.ID,
+			StockCode:     a.StockCode,
+			StockName:     a.StockName,
+			Type:          a.Type,
+			Condition:     a.Condition,
+			Threshold:     a.Threshold,
+			Frequency:     a.Frequency,
+			FrequencyDays: a.FrequencyDays,
+			IsActive:      a.IsActive,
+			CreatedAt:     a.CreatedAt,
+			TriggeredAt:   a.TriggeredAt,
+			LastChecked:   a.LastChecked,
+			BatchTag:      a.BatchTag,
+		}
 	}
+	return result
+}
+
+// convertAlertsFromTypes 将 types.Alert 转换为 main.Alert
+func convertAlertsFromTypes(alerts []types.Alert) []Alert {
+	result := make([]Alert, len(alerts))
+	for i, a := range alerts {
+		result[i] = Alert{
+			ID:            a.ID,
+			StockCode:     a.StockCode,
+			StockName:     a.StockName,
+			Type:          a.Type,
+			Condition:     a.Condition,
+			Threshold:     a.Threshold,
+			Frequency:     a.Frequency,
+			FrequencyDays: a.FrequencyDays,
+			IsActive:      a.IsActive,
+			CreatedAt:     a.CreatedAt,
+			TriggeredAt:   a.TriggeredAt,
+			LastChecked:   a.LastChecked,
+			BatchTag:      a.BatchTag,
+		}
+	}
+	return result
 }

@@ -9,7 +9,9 @@ import (
 	"stock-monitor/internal/api"
 	"stock-monitor/internal/types"
 	"stock-monitor/internal/ui"
+	"stock-monitor/internal/ui/watchlist"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -1557,7 +1559,7 @@ func (m *Model) handleWatchlistTagSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// 在原始列表中找到该股票并添加标签
 				for i, stock := range m.watchlist.Stocks {
 					if stock.Code == stockToTag.Code {
-						m.watchlist.Stocks[i].addTag(selectedTag)
+						watchlist.AddTag(&m.watchlist.Stocks[i], selectedTag)
 						break
 					}
 				}
@@ -1647,7 +1649,8 @@ func (m *Model) viewWatchlistTagSelect() string {
 		stock := filteredStocks[m.watchlistCursor]
 		if m.language == Chinese {
 			s += fmt.Sprintf("股票: %s (%s)\n", stock.Name, stock.Code)
-			s += fmt.Sprintf("当前标签: %s\n\n", stock.getTagsDisplay(m))
+			marketTag := m.getMarketTagName(stock.Market)
+			s += fmt.Sprintf("当前标签: %s\n\n", watchlist.GetTagsDisplay(&stock, marketTag))
 
 			// 显示该股票的标签，供删除使用
 			if len(stock.Tags) > 0 {
@@ -1670,7 +1673,8 @@ func (m *Model) viewWatchlistTagSelect() string {
 			}
 		} else {
 			s += fmt.Sprintf("Stock: %s (%s)\n", stock.Name, stock.Code)
-			s += fmt.Sprintf("Current tags: %s\n\n", stock.getTagsDisplay(m))
+			marketTag := m.getMarketTagName(stock.Market)
+			s += fmt.Sprintf("Current tags: %s\n\n", watchlist.GetTagsDisplay(&stock, marketTag))
 
 			// 显示该股票的标签，供删除使用
 			if len(stock.Tags) > 0 {
@@ -1766,8 +1770,8 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			stockFound := false
 			for i, stock := range m.watchlist.Stocks {
 				if stock.Code == currentStock.Code {
-					if stock.hasTag(selectedTag) {
-						m.watchlist.Stocks[i].removeTag(selectedTag)
+					if watchlist.HasTag(&stock, selectedTag) {
+						watchlist.RemoveTag(&m.watchlist.Stocks[i], selectedTag)
 						m.saveWatchlist()
 						m.invalidateWatchlistCache()
 
@@ -1867,8 +1871,8 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			stockFound := false
 			for i, stock := range m.watchlist.Stocks {
 				if stock.Code == currentStock.Code {
-					if !stock.hasTag(selectedTag) {
-						m.watchlist.Stocks[i].addTag(selectedTag)
+					if !watchlist.HasTag(&stock, selectedTag) {
+						watchlist.AddTag(&m.watchlist.Stocks[i], selectedTag)
 						m.saveWatchlist()
 						m.invalidateWatchlistCache()
 
@@ -1928,7 +1932,7 @@ func (m *Model) handleWatchlistTagRemoveSelect(msg tea.KeyMsg) (tea.Model, tea.C
 				// 在原始列表中找到该股票并删除指定标签
 				for i, stock := range m.watchlist.Stocks {
 					if stock.Code == stockToModify.Code {
-						m.watchlist.Stocks[i].removeTag(tagToRemove)
+						watchlist.RemoveTag(&m.watchlist.Stocks[i], tagToRemove)
 						// 如果删除后没有标签，添加默认标签
 						if len(m.watchlist.Stocks[i].Tags) == 0 {
 							m.watchlist.Stocks[i].Tags = []string{"-"}
@@ -2082,10 +2086,12 @@ func (m *Model) viewWatchlistTagManage() string {
 		stock := filteredStocks[m.watchlistCursor]
 		if m.language == Chinese {
 			s += fmt.Sprintf("股票: %s (%s)\n", stock.Name, stock.Code)
-			s += fmt.Sprintf("当前标签: %s\n\n", stock.getTagsDisplay(m))
+			marketTag := m.getMarketTagName(stock.Market)
+			s += fmt.Sprintf("当前标签: %s\n\n", watchlist.GetTagsDisplay(&stock, marketTag))
 		} else {
 			s += fmt.Sprintf("Stock: %s (%s)\n", stock.Name, stock.Code)
-			s += fmt.Sprintf("Current tags: %s\n\n", stock.getTagsDisplay(m))
+			marketTag := m.getMarketTagName(stock.Market)
+			s += fmt.Sprintf("Current tags: %s\n\n", watchlist.GetTagsDisplay(&stock, marketTag))
 		}
 
 		// 显示所有可用标签，标记当前股票拥有的标签
@@ -2103,7 +2109,7 @@ func (m *Model) viewWatchlistTagManage() string {
 				}
 
 				// 检查当前股票是否拥有这个标签
-				hasTag := stock.hasTag(tag)
+				hasTag := watchlist.HasTag(&stock, tag)
 				status := ""
 				if hasTag {
 					if m.language == Chinese {
@@ -3268,6 +3274,29 @@ func (m *Model) viewWatchlistSorting() string {
 // isWeekend, findPreviousTradingDay, findNextTradingDay, handleIntradayChartViewing, viewIntradayChart
 
 // ============================================================================
+// Model Interface Methods (for internal/intraday package)
+// ============================================================================
+
+// GetConfig returns the configuration for market access
+func (m *Model) GetConfig() interface{} {
+	return m.config
+}
+
+// GetStockPriceCache returns the stock price cache
+func (m *Model) GetStockPriceCache() map[string]interface{} {
+	cache := make(map[string]interface{})
+	for k, v := range m.stockPriceCache {
+		cache[k] = v
+	}
+	return cache
+}
+
+// GetStockPriceMutex returns the mutex protecting the stock price cache
+func (m *Model) GetStockPriceMutex() *sync.RWMutex {
+	return &m.stockPriceMutex
+}
+
+// ============================================================================
 // Column Management Methods (delegating to internal/ui)
 // ============================================================================
 
@@ -3406,7 +3435,8 @@ func (m *Model) GenerateWatchlistRow(watchStock *WatchlistStock, stockData *Stoc
 				row[i] = ""
 			}
 		case ui.ColTag:
-			row[i] = watchStock.getTagsDisplay(m)
+			marketTag := m.getMarketTagName(watchStock.Market)
+			row[i] = watchlist.GetTagsDisplay(watchStock, marketTag)
 		case ui.ColCode:
 			row[i] = watchStock.Code
 		case ui.ColName:
