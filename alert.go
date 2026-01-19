@@ -101,56 +101,18 @@ func (m *Model) handleCheckAlerts(msg checkAlertsMsg) (tea.Model, tea.Cmd) {
 
 // checkPriceAlert 检查价格告警
 func checkPriceAlert(stockData *StockData, alert Alert) bool {
-	currentPrice := stockData.Price
-
-	switch alert.Condition {
-	case ">":
-		return currentPrice > alert.Threshold
-	case "<":
-		return currentPrice < alert.Threshold
-	case ">=":
-		return currentPrice >= alert.Threshold
-	case "<=":
-		return currentPrice <= alert.Threshold
-	default:
-		return false
-	}
+	return CheckNumericCondition(stockData.Price, alert.Threshold, alert.Condition)
 }
 
 // checkRateAlert 检查涨跌幅告警
 func checkRateAlert(stockData *StockData, alert Alert) bool {
-	currentRate := stockData.ChangePercent
-
-	switch alert.Condition {
-	case ">":
-		return currentRate > alert.Threshold
-	case "<":
-		return currentRate < alert.Threshold
-	case ">=":
-		return currentRate >= alert.Threshold
-	case "<=":
-		return currentRate <= alert.Threshold
-	default:
-		return false
-	}
+	return CheckNumericCondition(stockData.ChangePercent, alert.Threshold, alert.Condition)
 }
 
 // checkVolumeAlert 检查成交量告警
 func checkVolumeAlert(stockData *StockData, alert Alert) bool {
-	currentVolume := float64(stockData.Volume)
-
-	switch alert.Condition {
-	case ">":
-		return currentVolume > alert.Threshold
-	case "<":
-		return currentVolume < alert.Threshold
-	case ">=":
-		return currentVolume >= alert.Threshold
-	case "<=":
-		return currentVolume <= alert.Threshold
-	default:
-		return false
-	}
+	volumeFloat := float64(stockData.Volume)
+	return CheckNumericCondition(volumeFloat, alert.Threshold, alert.Condition)
 }
 
 // ============================================================================
@@ -938,14 +900,7 @@ func (m *Model) handleAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter", " ":
 		// 设置告警类型
-		switch m.tagSelectCursor {
-		case 0:
-			m.selectedAlertType = AlertTypePrice
-		case 1:
-			m.selectedAlertType = AlertTypeRate
-		case 2:
-			m.selectedAlertType = AlertTypeVolume
-		}
+		m.selectedAlertType = GetAlertTypeFromCursor(m.tagSelectCursor)
 
 		// 进入条件选择
 		m.alertManageStep = 1
@@ -979,8 +934,7 @@ func (m *Model) handleAlertConditionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 
 	case "enter", " ":
 		// 设置条件
-		conditions := []string{">", "<", ">=", "<="}
-		m.selectedAlertCondition = conditions[m.tagSelectCursor]
+		m.selectedAlertCondition = GetAlertConditionFromCursor(m.tagSelectCursor)
 
 		// 进入阈值输入
 		m.alertManageStep = 2
@@ -1346,14 +1300,7 @@ func (m *Model) handleAlertEditTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter", " ":
 		// 设置告警类型
-		switch m.tagSelectCursor {
-		case 0:
-			m.selectedAlertType = AlertTypePrice
-		case 1:
-			m.selectedAlertType = AlertTypeRate
-		case 2:
-			m.selectedAlertType = AlertTypeVolume
-		}
+		m.selectedAlertType = GetAlertTypeFromCursor(m.tagSelectCursor)
 
 		// 进入条件选择
 		m.alertManageStep = 1
@@ -2187,14 +2134,7 @@ func (m *Model) handleBatchAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 
 	case "enter", " ":
 		// 设置告警类型
-		switch m.tagSelectCursor {
-		case 0:
-			m.selectedAlertType = AlertTypePrice
-		case 1:
-			m.selectedAlertType = AlertTypeRate
-		case 2:
-			m.selectedAlertType = AlertTypeVolume
-		}
+		m.selectedAlertType = GetAlertTypeFromCursor(m.tagSelectCursor)
 
 		// 进入条件选择
 		m.alertManageStep = 1
@@ -2228,8 +2168,7 @@ func (m *Model) handleBatchAlertConditionSelect(msg tea.KeyMsg) (tea.Model, tea.
 
 	case "enter", " ":
 		// 设置条件
-		conditions := []string{">", "<", ">=", "<="}
-		m.selectedAlertCondition = conditions[m.tagSelectCursor]
+		m.selectedAlertCondition = GetAlertConditionFromCursor(m.tagSelectCursor)
 
 		// 进入阈值输入
 		m.alertManageStep = 2

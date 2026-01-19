@@ -413,7 +413,6 @@ func (m *Model) getFilteredWatchlist() []WatchlistStock {
 func (m *Model) invalidateWatchlistCache() {
 	m.isFilteredWatchlistValid = false
 	m.cachedFilteredWatchlist = nil
-	m.cachedFilterTag = ""     // 保留用于向后兼容
 	m.cachedFilterMarket = ""  // 清除市场过滤缓存
 	m.cachedFilterUserTag = "" // 清除用户标签过滤缓存
 }

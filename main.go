@@ -418,14 +418,10 @@ func (m *Model) View() string {
 func (m *Model) handleMainMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "w":
-		if m.currentMenuItem > 0 {
-			m.currentMenuItem--
-		}
+		m.currentMenuItem = MoveCursorUp(m.currentMenuItem)
 		m.message = "" // 清除消息
 	case "down", "j", "s":
-		if m.currentMenuItem < len(m.menuItems)-1 {
-			m.currentMenuItem++
-		}
+		m.currentMenuItem = MoveCursorDown(m.currentMenuItem, len(m.menuItems)-1)
 		m.message = "" // 清除消息
 	case "enter", " ":
 		return m.executeMenuItem()
@@ -559,15 +555,11 @@ func (m *Model) handleAddingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		return m.processAddingStep()
 	case "left", "ctrl+b":
-		if m.inputCursor > 0 {
-			m.inputCursor--
-		}
+		m.inputCursor = MoveCursorUp(m.inputCursor)
 		return m, nil
 	case "right", "ctrl+f":
 		runes := []rune(m.input)
-		if m.inputCursor < len(runes) {
-			m.inputCursor++
-		}
+		m.inputCursor = MoveCursorDown(m.inputCursor, len(runes))
 		return m, nil
 	case "home", "ctrl+a":
 		m.inputCursor = 0
@@ -730,18 +722,32 @@ func (m *Model) viewAddingStock() string {
 	return s
 }
 
-func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// handleMonitoringNavigation 处理投资组合监控页面的导航操作
+func (m *Model) handleMonitoringNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch msg.String() {
+	case "up", "k", "w":
+		m.portfolioCursor = MoveCursorUp(m.portfolioCursor)
+		return m, nil, true
+	case "down", "j":
+		m.portfolioCursor = MoveCursorDown(m.portfolioCursor, len(m.portfolio.Stocks)-1)
+		return m, nil, true
+	}
+	return m, nil, false
+}
+
+// handleMonitoringActions 处理投资组合监控页面的数据操作
+func (m *Model) handleMonitoringActions(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	switch msg.String() {
 	case "esc", "q", "m":
 		m.stopIntradayDataCollection() // 停止分时数据采集
 		m.state = MainMenu
 		m.message = "" // 清除消息
-		return m, nil
+		return m, nil, true
 	case "e":
 		// 编辑当前光标指向的股票
 		if len(m.portfolio.Stocks) == 0 {
 			m.message = m.getText("emptyPortfolio")
-			return m, nil
+			return m, nil, true
 		}
 		logInfo("log.action.enterEdit")
 		m.previousState = m.state // 记录当前状态
@@ -751,15 +757,15 @@ func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tempCode = m.portfolio.Stocks[m.portfolioCursor].Code
 		m.tempCost = ""
 		m.tempQuantity = ""
-		m.input = fmt.Sprintf("%.*f", m.config.Display.DecimalPlaces, m.portfolio.Stocks[m.portfolioCursor].CostPrice) // 预填充当前成本价，使用配置的小数位数
+		m.input = fmt.Sprintf("%.*f", m.config.Display.DecimalPlaces, m.portfolio.Stocks[m.portfolioCursor].CostPrice) // 预填充当前成本价,使用配置的小数位数
 		m.inputCursor = len([]rune(m.input))                                                                           // 光标放到末尾
 		m.message = ""
-		return m, nil
+		return m, nil, true
 	case "d":
 		// 直接删除光标指向的股票
 		if len(m.portfolio.Stocks) == 0 {
 			m.message = m.getText("emptyPortfolio")
-			return m, nil
+			return m, nil, true
 		}
 		// 删除当前光标指向的股票
 		removedStock := m.portfolio.Stocks[m.portfolioCursor]
@@ -771,7 +777,7 @@ func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.portfolioCursor = len(m.portfolio.Stocks) - 1
 		}
 		m.message = fmt.Sprintf(m.getText("removeSuccess"), removedStock.Name, removedStock.Code)
-		return m, nil
+		return m, nil, true
 	case "a":
 		// 跳转到添加股票页面
 		logInfo("log.action.enterAdd")
@@ -784,22 +790,29 @@ func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stockInfo = nil
 		m.input = ""
 		m.message = ""
-		m.fromSearch = true // 设置标志，表示从持股列表进入，完成后应该回到监控页面
-		return m, nil
+		m.fromSearch = true // 设置标志,表示从持股列表进入,完成后应该回到监控页面
+		return m, nil, true
+	}
+	return m, nil, false
+}
+
+// handleMonitoringViews 处理投资组合监控页面的视图切换
+func (m *Model) handleMonitoringViews(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch msg.String() {
 	case "v":
 		// 查看分时图表
 		if len(m.portfolio.Stocks) == 0 {
 			m.message = m.getText("emptyPortfolio")
-			return m, nil
+			return m, nil, true
 		}
 		selectedStock := m.portfolio.Stocks[m.portfolioCursor]
 		m.chartViewStock = selectedStock.Code
 		m.chartViewStockName = selectedStock.Name
 
-		// 获取智能日期（与 worker 采集逻辑一致）
+		// 获取智能日期(与 worker 采集逻辑一致)
 		actualDate, _, err := GetTradingDayForCollection(selectedStock.Code, m)
 		if err != nil {
-			// 如果获取失败，降级为简单逻辑
+			// 如果获取失败,降级为简单逻辑
 			actualDate = getSmartChartDate()
 		}
 		m.chartViewDate = actualDate
@@ -824,7 +837,7 @@ func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				selectedStock.Code,
 				selectedStock.Name,
 				actualDate,
-			)
+			), true
 		}
 
 		// 数据存在 - 创建图表
@@ -833,7 +846,7 @@ func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chartLoadError = nil
 		m.chartIsCollecting = false
 		m.state = IntradayChartViewing
-		return m, nil
+		return m, nil, true
 	case "s":
 		// 进入排序菜单
 		logInfo("log.action.enterSort")
@@ -841,12 +854,12 @@ func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// 智能定位光标到当前排序字段
 		m.portfolioSortCursor = m.findSortFieldIndex(m.portfolioSortField, true)
 		m.message = ""
-		return m, nil
+		return m, nil, true
 	case "l", "L":
 		// 查看股票告警详情
 		if len(m.portfolio.Stocks) == 0 {
 			m.message = m.getText("emptyPortfolio")
-			return m, nil
+			return m, nil, true
 		}
 		currentStock := m.portfolio.Stocks[m.portfolioCursor]
 
@@ -862,18 +875,27 @@ func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		logInfo("log.action.enterStockAlertManagement", currentStock.Code, currentStock.Name)
 		m.state = StockAlertManage
 		m.message = ""
-		return m, nil
-	case "up", "k", "w":
-		if m.portfolioCursor > 0 {
-			m.portfolioCursor--
-		}
-		return m, nil
-	case "down", "j":
-		if m.portfolioCursor < len(m.portfolio.Stocks)-1 {
-			m.portfolioCursor++
-		}
-		return m, nil
+		return m, nil, true
 	}
+	return m, nil, false
+}
+
+func (m *Model) handleMonitoring(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// 尝试导航处理
+	if model, cmd, handled := m.handleMonitoringNavigation(msg); handled {
+		return model, cmd
+	}
+
+	// 尝试操作处理
+	if model, cmd, handled := m.handleMonitoringActions(msg); handled {
+		return model, cmd
+	}
+
+	// 尝试视图切换处理
+	if model, cmd, handled := m.handleMonitoringViews(msg); handled {
+		return model, cmd
+	}
+
 	return m, nil
 }
 
@@ -1049,15 +1071,11 @@ func (m *Model) handleEditingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter", " ":
 		return m.processEditingStep()
 	case "left", "ctrl+b":
-		if m.inputCursor > 0 {
-			m.inputCursor--
-		}
+		m.inputCursor = MoveCursorUp(m.inputCursor)
 		return m, nil
 	case "right", "ctrl+f":
 		runes := []rune(m.input)
-		if m.inputCursor < len(runes) {
-			m.inputCursor++
-		}
+		m.inputCursor = MoveCursorDown(m.inputCursor, len(runes))
 		return m, nil
 	case "home", "ctrl+a":
 		m.inputCursor = 0
@@ -1244,15 +1262,11 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			actualDate,
 		)
 	case "left", "ctrl+b":
-		if m.searchInputCursor > 0 {
-			m.searchInputCursor--
-		}
+		m.searchInputCursor = MoveCursorUp(m.searchInputCursor)
 		return m, nil
 	case "right", "ctrl+f":
 		runes := []rune(m.searchInput)
-		if m.searchInputCursor < len(runes) {
-			m.searchInputCursor++
-		}
+		m.searchInputCursor = MoveCursorDown(m.searchInputCursor, len(runes))
 		return m, nil
 	case "home", "ctrl+a":
 		m.searchInputCursor = 0
@@ -1429,13 +1443,9 @@ func (m *Model) handleLanguageSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = "" // 清除消息
 		return m, nil
 	case "up", "k", "w":
-		if m.languageCursor > 0 {
-			m.languageCursor--
-		}
+		m.languageCursor = MoveCursorUp(m.languageCursor)
 	case "down", "j", "s":
-		if m.languageCursor < 1 { // 0: Chinese, 1: English
-			m.languageCursor++
-		}
+		m.languageCursor = MoveCursorDown(m.languageCursor, 1) // 0: Chinese, 1: English
 	case "enter", " ":
 		// 选择语言
 		if m.languageCursor == 0 {
@@ -1589,15 +1599,11 @@ func (m *Model) handleWatchlistTagSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.resetWatchlistCursor() // 重置游标到第一只股票
 		return m, m.tickCmd()    // 重启定时器
 	case "up", "k", "w":
-		if m.tagSelectCursor > 0 {
-			m.tagSelectCursor--
-		}
+		m.tagSelectCursor = MoveCursorUp(m.tagSelectCursor)
 		return m, nil
 	case "down", "j", "s":
 		maxCursor := len(m.availableTags) // 包括"手动输入新标签"选项
-		if m.tagSelectCursor < maxCursor {
-			m.tagSelectCursor++
-		}
+		m.tagSelectCursor = MoveCursorDown(m.tagSelectCursor, maxCursor)
 		return m, nil
 	}
 	return m, nil
@@ -1943,14 +1949,10 @@ func (m *Model) handleWatchlistTagRemoveSelect(msg tea.KeyMsg) (tea.Model, tea.C
 		}
 		return m, nil
 	case "up", "k", "w":
-		if m.tagRemoveCursor > 0 {
-			m.tagRemoveCursor--
-		}
+		m.tagRemoveCursor = MoveCursorUp(m.tagRemoveCursor)
 		return m, nil
 	case "down", "j", "s":
-		if m.tagRemoveCursor < len(m.currentStockTags)-1 {
-			m.tagRemoveCursor++
-		}
+		m.tagRemoveCursor = MoveCursorDown(m.tagRemoveCursor, len(m.currentStockTags)-1)
 		return m, nil
 	}
 	return m, nil
@@ -1993,9 +1995,9 @@ func (m *Model) handleWatchlistTagEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// 更新可用标签列表
 		m.availableTags = m.getAvailableTags()
 
-		// 如果当前过滤标签是被修改的标签，更新过滤标签
-		if m.selectedTag == m.tagToEdit {
-			m.selectedTag = newTagName
+		// 如果当前过滤的用户标签是被修改的标签，更新过滤标签
+		if m.selectedUserTagFilter == m.tagToEdit {
+			m.selectedUserTagFilter = newTagName
 		}
 
 		// 显示成功消息
@@ -2010,16 +2012,12 @@ func (m *Model) handleWatchlistTagEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "left", "ctrl+b":
 		// 光标左移
-		if m.tagEditInputCursor > 0 {
-			m.tagEditInputCursor--
-		}
+		m.tagEditInputCursor = MoveCursorUp(m.tagEditInputCursor)
 		return m, nil
 	case "right", "ctrl+f":
 		// 光标右移
 		runes := []rune(m.tagEditInput)
-		if m.tagEditInputCursor < len(runes) {
-			m.tagEditInputCursor++
-		}
+		m.tagEditInputCursor = MoveCursorDown(m.tagEditInputCursor, len(runes))
 		return m, nil
 	case "home", "ctrl+a":
 		// 光标移到开头
@@ -2651,22 +2649,18 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "up", "k", "w":
-		// 获取一次过滤后的列表，避免重复调用
+		// 获取一次过滤后的列表,避免重复调用
 		filteredStocks := m.getFilteredWatchlist()
-		if m.watchlistCursor > 0 {
-			m.watchlistCursor--
-			// 只在光标移动时调整滚动
-			m.adjustWatchlistScroll(filteredStocks)
-		}
+		m.watchlistCursor = MoveCursorUp(m.watchlistCursor)
+		// 只在光标移动时调整滚动
+		m.adjustWatchlistScroll(filteredStocks)
 		return m, nil
 	case "down", "j":
-		// 获取一次过滤后的列表，避免重复调用
+		// 获取一次过滤后的列表,避免重复调用
 		filteredStocks := m.getFilteredWatchlist()
-		if m.watchlistCursor < len(filteredStocks)-1 {
-			m.watchlistCursor++
-			// 只在光标移动时调整滚动
-			m.adjustWatchlistScroll(filteredStocks)
-		}
+		m.watchlistCursor = MoveCursorDown(m.watchlistCursor, len(filteredStocks)-1)
+		// 只在光标移动时调整滚动
+		m.adjustWatchlistScroll(filteredStocks)
 		return m, nil
 	}
 	return m, nil
@@ -3090,13 +3084,9 @@ func (m *Model) handlePortfolioSorting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "up", "k", "w":
-		if m.portfolioSortCursor > 0 {
-			m.portfolioSortCursor--
-		}
+		m.portfolioSortCursor = MoveCursorUp(m.portfolioSortCursor)
 	case "down", "j", "s":
-		if m.portfolioSortCursor < len(sortFields)-1 {
-			m.portfolioSortCursor++
-		}
+		m.portfolioSortCursor = MoveCursorDown(m.portfolioSortCursor, len(sortFields)-1)
 	case "enter", " ":
 		// 切换排序方向或应用排序
 		selectedField := sortFields[m.portfolioSortCursor]
@@ -3148,13 +3138,9 @@ func (m *Model) handleWatchlistSorting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "up", "k", "w":
-		if m.watchlistSortCursor > 0 {
-			m.watchlistSortCursor--
-		}
+		m.watchlistSortCursor = MoveCursorUp(m.watchlistSortCursor)
 	case "down", "j", "s":
-		if m.watchlistSortCursor < len(sortFields)-1 {
-			m.watchlistSortCursor++
-		}
+		m.watchlistSortCursor = MoveCursorDown(m.watchlistSortCursor, len(sortFields)-1)
 	case "enter", " ":
 		// 切换排序方向或应用排序
 		selectedField := sortFields[m.watchlistSortCursor]

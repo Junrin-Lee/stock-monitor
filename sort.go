@@ -23,7 +23,7 @@ func NewDefaultSorter() *DefaultSorter {
 func (s *DefaultSorter) SortPortfolio(stocks []Stock, field SortField, direction SortDirection) {
 	sort.Slice(stocks, func(i, j int) bool {
 		var result bool
-		
+
 		switch field {
 		case SortByCode:
 			result = stocks[i].Code < stocks[j].Code
@@ -54,11 +54,11 @@ func (s *DefaultSorter) SortPortfolio(stocks []Stock, field SortField, direction
 		default:
 			result = stocks[i].Code < stocks[j].Code
 		}
-		
+
 		if direction == SortDesc {
 			result = !result
 		}
-		
+
 		return result
 	})
 }
@@ -67,11 +67,11 @@ func (s *DefaultSorter) SortPortfolio(stocks []Stock, field SortField, direction
 func (s *DefaultSorter) SortWatchlist(stocks []WatchlistStock, stockCache map[string]*StockPriceCacheEntry, field SortField, direction SortDirection) {
 	sort.Slice(stocks, func(i, j int) bool {
 		var result bool
-		
+
 		// 获取缓存的股价数据
 		stockDataI := s.getStockDataFromCache(stocks[i].Code, stockCache)
 		stockDataJ := s.getStockDataFromCache(stocks[j].Code, stockCache)
-		
+
 		switch field {
 		case SortByCode:
 			result = stocks[i].Code < stocks[j].Code
@@ -100,11 +100,11 @@ func (s *DefaultSorter) SortWatchlist(stocks []WatchlistStock, stockCache map[st
 		default:
 			result = stocks[i].Code < stocks[j].Code
 		}
-		
+
 		if direction == SortDesc {
 			result = !result
 		}
-		
+
 		return result
 	})
 }
@@ -157,11 +157,11 @@ func (s *DefaultSorter) getTagsDisplay(tags []string) string {
 			validTags = append(validTags, tag)
 		}
 	}
-	
+
 	if len(validTags) == 0 {
 		return "-"
 	}
-	
+
 	return strings.Join(validTags, ",")
 }
 
@@ -192,10 +192,10 @@ func (m *Model) updatePortfolioPricesFromCache() {
 func (m *Model) optimizedSortWatchlist(field SortField, direction SortDirection) {
 	// 获取过滤后的股票列表
 	filteredStocks := m.getFilteredWatchlist()
-	
+
 	// 使用高效排序（基于缓存数据，避免API调用）
 	sorter := NewDefaultSorter()
-	
+
 	// 读取股价缓存
 	m.stockPriceMutex.RLock()
 	stockCacheCopy := make(map[string]*StockPriceCacheEntry)
@@ -203,13 +203,13 @@ func (m *Model) optimizedSortWatchlist(field SortField, direction SortDirection)
 		stockCacheCopy[k] = v
 	}
 	m.stockPriceMutex.RUnlock()
-	
+
 	// 执行排序（使用缓存数据）
 	sorter.SortWatchlist(filteredStocks, stockCacheCopy, field, direction)
-	
+
 	// 将排序后的过滤列表更新回原列表
 	// 如果没有过滤，直接使用排序结果
-	if m.selectedTag == "" {
+	if m.selectedMarketFilter == "" && m.selectedUserTagFilter == "" {
 		m.watchlist.Stocks = filteredStocks
 	} else {
 		// 如果有过滤，需要将排序结果更新回原列表
@@ -218,21 +218,21 @@ func (m *Model) optimizedSortWatchlist(field SortField, direction SortDirection)
 		for i, stock := range filteredStocks {
 			sortedMap[stock.Code] = i
 		}
-		
+
 		// 重新排列原列表，将过滤的股票按排序顺序放在前面
 		var newStocks []WatchlistStock
 		var remainingStocks []WatchlistStock
-		
+
 		// 先添加排序后的过滤股票
 		newStocks = append(newStocks, filteredStocks...)
-		
+
 		// 再添加未过滤的股票
 		for _, stock := range m.watchlist.Stocks {
 			if _, exists := sortedMap[stock.Code]; !exists {
 				remainingStocks = append(remainingStocks, stock)
 			}
 		}
-		
+
 		newStocks = append(newStocks, remainingStocks...)
 		m.watchlist.Stocks = newStocks
 	}

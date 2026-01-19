@@ -175,7 +175,6 @@ type Model struct {
 	watchlistCursor    int // 自选列表当前选中行
 
 	// For watchlist tagging and grouping
-	selectedTag           string     // 当前选择的标签过滤（已弃用，保留用于向后兼容）
 	selectedMarketFilter  MarketType // 市场过滤条件："" 表示全部市场，或具体市场类型
 	selectedUserTagFilter string     // 用户标签过滤条件："" 表示全部标签，或具体用户标签
 	filterSelectionStep   int        // 过滤选择步骤：0=市场选择, 1=用户标签选择
@@ -195,7 +194,6 @@ type Model struct {
 
 	// Performance optimization - cached filtered watchlist
 	cachedFilteredWatchlist  []WatchlistStock // 缓存的过滤后自选列表
-	cachedFilterTag          string           // 缓存的过滤标签（已弃用）
 	cachedFilterMarket       MarketType       // 缓存的市场过滤条件
 	cachedFilterUserTag      string           // 缓存的用户标签过滤条件
 	isFilteredWatchlistValid bool             // 缓存是否有效
@@ -234,8 +232,6 @@ type Model struct {
 	searchIntradayData     *IntradayData // 搜索模式的临时分时数据(仅内存)
 	searchIntradayWorker   chan struct{} // 临时 worker 停止信号
 	searchIntradayUpdateCh chan struct{} // 数据更新通知 channel
-	searchChartWidth       int           // 搜索图表宽度（响应式布局）
-	searchChartHeight      int           // 搜索图表高度
 
 	// For alert management - 告警管理相关字段
 	alertData              AlertData        // 告警数据
@@ -423,3 +419,74 @@ const (
 	BatchSourcePortfolio                         // 从持股列表
 	BatchSourceManual                            // 手动输入
 )
+
+// ============================================================================
+// 辅助函数 - Helper Functions
+// ============================================================================
+
+// AlertConditions 支持的警报条件列表
+var AlertConditions = []string{">", "<", ">=", "<="}
+
+// GetAlertTypeFromCursor 根据光标位置返回警报类型
+func GetAlertTypeFromCursor(cursor int) AlertType {
+	types := []AlertType{AlertTypePrice, AlertTypeRate, AlertTypeVolume}
+	if cursor >= 0 && cursor < len(types) {
+		return types[cursor]
+	}
+	return AlertTypePrice // 默认返回价格警报
+}
+
+// GetAlertConditionFromCursor 根据光标位置返回条件符号
+func GetAlertConditionFromCursor(cursor int) string {
+	if cursor >= 0 && cursor < len(AlertConditions) {
+		return AlertConditions[cursor]
+	}
+	return ">" // 默认返回大于
+}
+
+// CheckNumericCondition 检查数值是否满足条件
+// 参数:
+//   - value: 当前值
+//   - threshold: 阈值
+//   - condition: 条件符号 (">", "<", ">=", "<=")
+//
+// 返回: 是否满足条件
+func CheckNumericCondition(value, threshold float64, condition string) bool {
+	switch condition {
+	case ">":
+		return value > threshold
+	case "<":
+		return value < threshold
+	case ">=":
+		return value >= threshold
+	case "<=":
+		return value <= threshold
+	default:
+		return false
+	}
+}
+
+// MoveCursorUp 处理光标上移
+// 参数:
+//   - current: 当前光标位置
+//
+// 返回: 新的光标位置
+func MoveCursorUp(current int) int {
+	if current > 0 {
+		return current - 1
+	}
+	return current
+}
+
+// MoveCursorDown 处理光标下移
+// 参数:
+//   - current: 当前光标位置
+//   - maxIndex: 最大索引(列表长度-1)
+//
+// 返回: 新的光标位置
+func MoveCursorDown(current, maxIndex int) int {
+	if current < maxIndex {
+		return current + 1
+	}
+	return current
+}
