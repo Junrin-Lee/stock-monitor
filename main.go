@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
+
+	"stock-monitor/internal/app"
 	"stock-monitor/internal/types"
 	"stock-monitor/internal/ui"
 	"stock-monitor/internal/ui/watchlist"
-	"sync"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -53,12 +55,13 @@ func (m *Model) getMenuItems() []string {
 }
 
 func main() {
-	// 确保目录存在
-	os.MkdirAll("data", 0755)
-	os.MkdirAll("cmd/conf", 0755)
-	os.MkdirAll("i18n", 0755)
+	// 初始化应用程序（创建目录和UI组件）
+	if err := app.InitializeApp(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize app: %v\n", err)
+		os.Exit(1)
+	}
 
-	// 初始化日志系统（在所有初始化之前）
+	// 初始化日志系统
 	logDir := filepath.Join(".", "data", "logs")
 	logLevel := LogInfo // 默认 INFO 级别
 	if err := InitLogger(logDir, logLevel); err != nil {
@@ -72,9 +75,6 @@ func main() {
 
 	// 加载 i18n 文件
 	loadI18nFiles()
-
-	// 初始化列注册表
-	ui.InitColumnRegistry()
 
 	// 加载配置文件
 	config := loadConfig()
