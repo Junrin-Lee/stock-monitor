@@ -1,13 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"stock-monitor/internal/api"
 	"stock-monitor/internal/ui/watchlist"
-	"stock-monitor/internal/ui"
-	"strings"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // ============================================================================
@@ -153,14 +148,6 @@ func (m *Model) invalidateWatchlistCache() {
 // ============================================================================
 
 // resetWatchlistCursor resets cursor to first stock in filtered list
-func (m *Model) resetWatchlistCursor() {
-	filteredStocks := m.getFilteredWatchlist()
-	maxWatchlistLines := m.config.Display.MaxLines
-
-	pos := watchlist.ResetWatchlistCursor(len(filteredStocks), maxWatchlistLines)
-	m.watchlistCursor = pos.Cursor
-	m.watchlistScrollPos = pos.ScrollPos
-}
 
 // adjustWatchlistScroll adjusts scroll position
 func (m *Model) adjustWatchlistScroll(filteredStocks []WatchlistStock) {
@@ -210,234 +197,14 @@ func (m *Model) removeFromWatchlist(index int) {
 // ============================================================================
 
 // handleWatchlistTagging handles tag input state
-func (m *Model) handleWatchlistTagging(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
-		if m.tagInput == "" {
-			// Return to tag management view
-			m.availableTags = m.getAvailableTags()
-			m.state = WatchlistTagManage
-			m.tagManageCursor = 0
-			return m, nil
-		}
-
-		// Update tags for selected stock (based on filtered list)
-		filteredStocks := m.getFilteredWatchlist()
-		if m.watchlistCursor >= 0 && m.watchlistCursor < len(filteredStocks) {
-			stockToTag := filteredStocks[m.watchlistCursor]
-
-			// Find the stock in original list and add tags
-			for i, stock := range m.watchlist.Stocks {
-				if stock.Code == stockToTag.Code {
-					// Handle multiple tags (comma separated)
-					newTags := strings.Split(m.tagInput, ",")
-					for _, tag := range newTags {
-						tag = strings.TrimSpace(tag)
-						if tag != "" && tag != "-" {
-							watchlist.AddTag(&m.watchlist.Stocks[i], tag)
-						}
-					}
-					// Ensure at least default tag if no valid tags
-					if len(m.watchlist.Stocks[i].Tags) == 0 {
-						m.watchlist.Stocks[i].Tags = []string{"-"}
-					}
-
-					// Update current stock tags list
-					m.currentStockTags = make([]string, 0)
-					for _, tag := range m.watchlist.Stocks[i].Tags {
-						if tag != "" && tag != "-" {
-							m.currentStockTags = append(m.currentStockTags, tag)
-						}
-					}
-					break
-				}
-			}
-
-			m.invalidateWatchlistCache()
-			m.saveWatchlist()
-
-			if m.language == Chinese {
-				m.message = fmt.Sprintf("已为 %s 添加标签: %s",
-					stockToTag.Name, m.tagInput)
-			} else {
-				m.message = fmt.Sprintf("Added tags to %s: %s",
-					stockToTag.Name, m.tagInput)
-			}
-		}
-
-		// Return to tag management view
-		m.availableTags = m.getAvailableTags()
-		m.state = WatchlistTagManage
-		m.tagManageCursor = 0
-		m.tagInput = ""
-		m.tagInputCursor = 0
-		return m, nil
-	case "esc", "q":
-		// Return to tag management view
-		m.availableTags = m.getAvailableTags()
-		m.state = WatchlistTagManage
-		m.tagManageCursor = 0
-		m.tagInput = ""
-		m.tagInputCursor = 0
-		m.message = ""
-		return m, nil
-	case "left", "ctrl+b":
-		if m.tagInputCursor > 0 {
-			m.tagInputCursor--
-		}
-		return m, nil
-	case "right", "ctrl+f":
-		runes := []rune(m.tagInput)
-		if m.tagInputCursor < len(runes) {
-			m.tagInputCursor++
-		}
-		return m, nil
-	case "home", "ctrl+a":
-		m.tagInputCursor = 0
-		return m, nil
-	case "end", "ctrl+e":
-		m.tagInputCursor = len([]rune(m.tagInput))
-		return m, nil
-	case "backspace":
-		m.tagInput, m.tagInputCursor = ui.DeleteRuneBeforeCursor(m.tagInput, m.tagInputCursor)
-		return m, nil
-	case "delete", "ctrl+d":
-		m.tagInput, m.tagInputCursor = ui.DeleteRuneAtCursor(m.tagInput, m.tagInputCursor)
-		return m, nil
-	default:
-		str := msg.String()
-		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
-			m.tagInput, m.tagInputCursor = ui.InsertStringAtCursor(m.tagInput, m.tagInputCursor, str)
-		}
-		return m, nil
-	}
-}
 
 // handleWatchlistGroupSelect handles group selection state
-func (m *Model) handleWatchlistGroupSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	marketTags := m.getMarketTags()
-	userTags := m.getUserTags()
-
-	switch msg.String() {
-	case "enter":
-		if m.filterSelectionStep == 0 {
-			// First stage: select market
-			if m.cursor == 0 {
-				m.selectedMarketFilter = ""
-			} else if m.cursor > 0 && m.cursor <= len(marketTags) {
-				selectedMarketTag := marketTags[m.cursor-1]
-				// Convert market tag to MarketType
-				switch selectedMarketTag {
-				case m.getText("marketTag.china"):
-					m.selectedMarketFilter = MarketChina
-				case m.getText("marketTag.us"):
-					m.selectedMarketFilter = MarketUS
-				case m.getText("marketTag.hongkong"):
-					m.selectedMarketFilter = MarketHongKong
-				}
-			}
-			// Move to second stage
-			m.filterSelectionStep = 1
-			m.cursor = 0
-			return m, nil
-
-		} else {
-			// Second stage: select user tag
-			if m.cursor == 0 {
-				m.selectedUserTagFilter = ""
-			} else if m.cursor > 0 && m.cursor <= len(userTags) {
-				m.selectedUserTagFilter = userTags[m.cursor-1]
-				m.lastSelectedGroupTag = m.selectedUserTagFilter
-			}
-
-			m.invalidateWatchlistCache()
-			m.filterSelectionStep = 0
-			m.state = WatchlistViewing
-			m.resetWatchlistCursor()
-			m.message = ""
-			return m, m.tickCmd()
-		}
-
-	case "esc", "q":
-		m.filterSelectionStep = 0
-		m.selectedMarketFilter = ""
-		m.state = WatchlistViewing
-		m.message = ""
-		return m, m.tickCmd()
-
-	case "c":
-		// Clear all filters
-		m.selectedMarketFilter = ""
-		m.selectedUserTagFilter = ""
-		m.invalidateWatchlistCache()
-		m.filterSelectionStep = 0
-		m.state = WatchlistViewing
-		m.resetWatchlistCursor()
-		m.message = ""
-		return m, m.tickCmd()
-
-	case "b", "backspace":
-		// Return to first stage if in second stage
-		if m.filterSelectionStep == 1 {
-			m.filterSelectionStep = 0
-			m.cursor = 0
-			m.selectedMarketFilter = ""
-			return m, nil
-		}
-		return m, nil
-
-	case "up", "k", "w":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-		return m, nil
-
-	case "down", "j", "s":
-		maxCursor := 0
-		if m.filterSelectionStep == 0 {
-			maxCursor = len(marketTags)
-		} else {
-			maxCursor = len(userTags)
-		}
-
-		if m.cursor < maxCursor {
-			m.cursor++
-		}
-		return m, nil
-	}
-
-	return m, nil
-}
 
 // ============================================================================
 // View Functions (Adapters)
 // ============================================================================
 
 // viewWatchlistTagging renders tag input view
-func (m *Model) viewWatchlistTagging() string {
-	filteredStocks := m.getFilteredWatchlist()
-	if m.watchlistCursor < 0 || m.watchlistCursor >= len(filteredStocks) {
-		return ""
-	}
-
-	stock := filteredStocks[m.watchlistCursor]
-	marketTag := m.getMarketTagName(stock.Market)
-
-	params := watchlist.TaggingViewParams{
-		Title:          m.getText("watchlist.setTag"),
-		StockName:      stock.Name,
-		StockCode:      stock.Code,
-		MarketLabel:    m.getText("marketInfo"),
-		MarketTag:      marketTag,
-		CurrentTags:    watchlist.GetTagsDisplay(&stock, marketTag),
-		InputPrompt:    m.getText("watchlist.enterTags"),
-		TagInput:       m.tagInput,
-		TagInputCursor: m.tagInputCursor,
-		HelpText:       m.getText("watchlist.tagHelp"),
-	}
-
-	return watchlist.RenderTaggingView(params, ui.FormatTextWithCursor)
-}
 
 // renderCurrentFilterStatus renders current filter status
 func (m *Model) renderCurrentFilterStatus() string {
@@ -450,28 +217,6 @@ func (m *Model) renderCurrentFilterStatus() string {
 }
 
 // viewWatchlistGroupSelect renders group selection view
-func (m *Model) viewWatchlistGroupSelect() string {
-	marketTags := m.getMarketTags()
-	userTags := m.getUserTags()
-
-	params := watchlist.GroupSelectViewParams{
-		Title:            m.getText("watchlist.selectGroup"),
-		MarketTagsTitle:  m.getText("group.marketTags"),
-		UserTagsTitle:    m.getText("group.userTags"),
-		AllMarketsText:   m.getText("filter.allMarkets"),
-		AllTagsText:      m.getText("filter.allTags"),
-		NoTagsText:       m.getText("watchlist.noTags"),
-		HelpText:         m.getGroupHelpText(),
-		MarketTags:       marketTags,
-		UserTags:         userTags,
-		Cursor:           m.cursor,
-		FilterStep:       m.filterSelectionStep,
-		SelectedMarket:   m.selectedMarketFilter,
-		GetMarketTagName: m.getMarketTagName,
-	}
-
-	return watchlist.RenderGroupSelectView(params)
-}
 
 // getGroupHelpText returns help text based on filter selection step
 func (m *Model) getGroupHelpText() string {
