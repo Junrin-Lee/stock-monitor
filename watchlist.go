@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"stock-monitor/internal/api"
 	"stock-monitor/internal/ui/watchlist"
+	"stock-monitor/internal/ui"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -298,15 +299,15 @@ func (m *Model) handleWatchlistTagging(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tagInputCursor = len([]rune(m.tagInput))
 		return m, nil
 	case "backspace":
-		m.tagInput, m.tagInputCursor = deleteRuneBeforeCursor(m.tagInput, m.tagInputCursor)
+		m.tagInput, m.tagInputCursor = ui.DeleteRuneBeforeCursor(m.tagInput, m.tagInputCursor)
 		return m, nil
 	case "delete", "ctrl+d":
-		m.tagInput, m.tagInputCursor = deleteRuneAtCursor(m.tagInput, m.tagInputCursor)
+		m.tagInput, m.tagInputCursor = ui.DeleteRuneAtCursor(m.tagInput, m.tagInputCursor)
 		return m, nil
 	default:
 		str := msg.String()
-		if len(str) > 0 && str != "\n" && str != "\r" && !isControlKey(str) {
-			m.tagInput, m.tagInputCursor = insertStringAtCursor(m.tagInput, m.tagInputCursor, str)
+		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
+			m.tagInput, m.tagInputCursor = ui.InsertStringAtCursor(m.tagInput, m.tagInputCursor, str)
 		}
 		return m, nil
 	}
@@ -435,7 +436,7 @@ func (m *Model) viewWatchlistTagging() string {
 		HelpText:       m.getText("watchlist.tagHelp"),
 	}
 
-	return watchlist.RenderTaggingView(params, formatTextWithCursor)
+	return watchlist.RenderTaggingView(params, ui.FormatTextWithCursor)
 }
 
 // renderCurrentFilterStatus renders current filter status

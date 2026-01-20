@@ -593,16 +593,16 @@ func (m *Model) handleAddingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.inputCursor = len([]rune(m.input))
 		return m, nil
 	case "backspace":
-		m.input, m.inputCursor = deleteRuneBeforeCursor(m.input, m.inputCursor)
+		m.input, m.inputCursor = ui.DeleteRuneBeforeCursor(m.input, m.inputCursor)
 		return m, nil
 	case "delete", "ctrl+d":
-		m.input, m.inputCursor = deleteRuneAtCursor(m.input, m.inputCursor)
+		m.input, m.inputCursor = ui.DeleteRuneAtCursor(m.input, m.inputCursor)
 		return m, nil
 	default:
 		// 改进的输入处理：支持多字节字符（如中文）
 		str := msg.String()
-		if len(str) > 0 && str != "\n" && str != "\r" && !isControlKey(str) {
-			m.input, m.inputCursor = insertStringAtCursor(m.input, m.inputCursor, str)
+		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
+			m.input, m.inputCursor = ui.InsertStringAtCursor(m.input, m.inputCursor, str)
 		}
 	}
 	return m, nil
@@ -718,19 +718,19 @@ func (m *Model) viewAddingStock() string {
 
 	switch m.addingStep {
 	case 0:
-		s += m.getText("enterSearch") + formatTextWithCursor(m.input, m.inputCursor) + "\n"
+		s += m.getText("enterSearch") + ui.FormatTextWithCursor(m.input, m.inputCursor) + "\n"
 		s += "\n" + m.getText("searchFormats") + "\n"
 	case 1:
 		s += fmt.Sprintf(m.getText("stockCode"), m.tempCode) + "\n"
 		s += fmt.Sprintf(m.getText("stockName"), m.stockInfo.Name) + "\n"
 		s += fmt.Sprintf(m.getText("currentPrice"), m.stockInfo.Price) + "\n\n"
-		s += m.getText("enterCost") + formatTextWithCursor(m.input, m.inputCursor) + "\n"
+		s += m.getText("enterCost") + ui.FormatTextWithCursor(m.input, m.inputCursor) + "\n"
 	case 2:
 		s += fmt.Sprintf(m.getText("stockCode"), m.tempCode) + "\n"
 		s += fmt.Sprintf(m.getText("stockName"), m.stockInfo.Name) + "\n"
 		s += fmt.Sprintf(m.getText("currentPrice"), m.stockInfo.Price) + "\n"
 		s += fmt.Sprintf(m.getText("costPrice"), m.tempCost) + "\n\n"
-		s += m.getText("enterQuantity") + formatTextWithCursor(m.input, m.inputCursor) + "\n"
+		s += m.getText("enterQuantity") + ui.FormatTextWithCursor(m.input, m.inputCursor) + "\n"
 	}
 
 	// 添加光标操作提示
@@ -1109,16 +1109,16 @@ func (m *Model) handleEditingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.inputCursor = len([]rune(m.input))
 		return m, nil
 	case "backspace":
-		m.input, m.inputCursor = deleteRuneBeforeCursor(m.input, m.inputCursor)
+		m.input, m.inputCursor = ui.DeleteRuneBeforeCursor(m.input, m.inputCursor)
 		return m, nil
 	case "delete", "ctrl+d":
-		m.input, m.inputCursor = deleteRuneAtCursor(m.input, m.inputCursor)
+		m.input, m.inputCursor = ui.DeleteRuneAtCursor(m.input, m.inputCursor)
 		return m, nil
 	default:
 		// 改进的输入处理：支持多字节字符（如中文）
 		str := msg.String()
-		if len(str) > 0 && str != "\n" && str != "\r" && !isControlKey(str) {
-			m.input, m.inputCursor = insertStringAtCursor(m.input, m.inputCursor, str)
+		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
+			m.input, m.inputCursor = ui.InsertStringAtCursor(m.input, m.inputCursor, str)
 		}
 	}
 	return m, nil
@@ -1193,7 +1193,7 @@ func (m *Model) viewEditingStock() string {
 			s += fmt.Sprintf("Stock: %s (%s)\n", stock.Name, stock.Code)
 		}
 		s += fmt.Sprintf(m.getText("currentCost"), stock.CostPrice) + "\n\n"
-		s += m.getText("enterNewCost") + formatTextWithCursor(m.input, m.inputCursor) + "\n"
+		s += m.getText("enterNewCost") + ui.FormatTextWithCursor(m.input, m.inputCursor) + "\n"
 	case 2:
 		stock := m.portfolio.Stocks[m.selectedStockIndex]
 		if m.language == Chinese {
@@ -1203,7 +1203,7 @@ func (m *Model) viewEditingStock() string {
 		}
 		s += fmt.Sprintf(m.getText("newCost"), stock.CostPrice) + "\n"
 		s += fmt.Sprintf(m.getText("currentQuantity"), stock.Quantity) + "\n\n"
-		s += m.getText("enterNewQuantity") + formatTextWithCursor(m.input, m.inputCursor) + "\n"
+		s += m.getText("enterNewQuantity") + ui.FormatTextWithCursor(m.input, m.inputCursor) + "\n"
 	}
 
 	// 添加光标操作提示
@@ -1300,15 +1300,15 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInputCursor = len([]rune(m.searchInput))
 		return m, nil
 	case "backspace":
-		m.searchInput, m.searchInputCursor = deleteRuneBeforeCursor(m.searchInput, m.searchInputCursor)
+		m.searchInput, m.searchInputCursor = ui.DeleteRuneBeforeCursor(m.searchInput, m.searchInputCursor)
 		return m, nil
 	case "delete", "ctrl+d":
-		m.searchInput, m.searchInputCursor = deleteRuneAtCursor(m.searchInput, m.searchInputCursor)
+		m.searchInput, m.searchInputCursor = ui.DeleteRuneAtCursor(m.searchInput, m.searchInputCursor)
 		return m, nil
 	default:
 		str := msg.String()
-		if len(str) > 0 && str != "\n" && str != "\r" && !isControlKey(str) {
-			m.searchInput, m.searchInputCursor = insertStringAtCursor(m.searchInput, m.searchInputCursor, str)
+		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
+			m.searchInput, m.searchInputCursor = ui.InsertStringAtCursor(m.searchInput, m.searchInputCursor, str)
 		}
 	}
 	return m, nil
@@ -1331,7 +1331,7 @@ func (m *Model) handleSearchResult(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) viewSearchingStock() string {
 	s := m.getText("searchTitle") + "\n\n"
-	s += m.getText("enterSearch") + formatTextWithCursor(m.searchInput, m.searchInputCursor) + "\n\n"
+	s += m.getText("enterSearch") + ui.FormatTextWithCursor(m.searchInput, m.searchInputCursor) + "\n\n"
 	s += m.getText("searchFormats") + "\n\n"
 
 	if m.language == Chinese {
@@ -1459,7 +1459,7 @@ func (m *Model) viewSearchResult() string {
 	return s
 }
 
-// formatVolume, isControlKey 已移动到 format.go 和 ui_utils.go
+// formatVolume, ui.IsControlKey 已移动到 format.go 和 ui_utils.go
 
 func (m *Model) handleLanguageSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -2056,16 +2056,16 @@ func (m *Model) handleWatchlistTagEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "backspace":
 		// 删除光标前的字符
-		m.tagEditInput, m.tagEditInputCursor = deleteRuneBeforeCursor(m.tagEditInput, m.tagEditInputCursor)
+		m.tagEditInput, m.tagEditInputCursor = ui.DeleteRuneBeforeCursor(m.tagEditInput, m.tagEditInputCursor)
 		return m, nil
 	case "delete", "ctrl+d":
 		// 删除光标处的字符
-		m.tagEditInput, m.tagEditInputCursor = deleteRuneAtCursor(m.tagEditInput, m.tagEditInputCursor)
+		m.tagEditInput, m.tagEditInputCursor = ui.DeleteRuneAtCursor(m.tagEditInput, m.tagEditInputCursor)
 		return m, nil
 	default:
 		// 处理文本输入
 		if len(msg.String()) == 1 || (len(msg.String()) > 1 && msg.Type == tea.KeyRunes) {
-			m.tagEditInput, m.tagEditInputCursor = insertStringAtCursor(m.tagEditInput, m.tagEditInputCursor, msg.String())
+			m.tagEditInput, m.tagEditInputCursor = ui.InsertStringAtCursor(m.tagEditInput, m.tagEditInputCursor, msg.String())
 		}
 		return m, nil
 	}
@@ -2200,7 +2200,7 @@ func (m *Model) viewWatchlistTagEdit() string {
 
 	s += m.getText("editTagTitle") + "\n\n"
 	s += fmt.Sprintf(m.getText("editingTag"), m.tagToEdit) + "\n\n"
-	s += m.getText("enterNewTagName") + formatTextWithCursor(m.tagEditInput, m.tagEditInputCursor) + "\n\n"
+	s += m.getText("enterNewTagName") + ui.FormatTextWithCursor(m.tagEditInput, m.tagEditInputCursor) + "\n\n"
 
 	if m.language == Chinese {
 		s += "提示: 修改后将更新所有使用此标签的股票\n"
@@ -2217,7 +2217,7 @@ func (m *Model) viewWatchlistTagEdit() string {
 	return s
 }
 
-// 文本编辑辅助函数 (insertRuneAtCursor, deleteRuneBeforeCursor, handleTextInput 等) 已移动到 ui_utils.go
+// 文本编辑辅助函数 (ui.InsertRuneAtCursor, ui.DeleteRuneBeforeCursor, ui.HandleTextInput 等) 已移动到 ui_utils.go
 
 // isStockInWatchlist 已移动到 watchlist.go
 
