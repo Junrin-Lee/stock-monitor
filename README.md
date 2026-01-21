@@ -1,6 +1,6 @@
 # Stock Monitor - 股票监控系统
 
-[![Version](https://img.shields.io/badge/version-v6.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v7.0-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -9,6 +9,8 @@
 **多语言文档**: [中文](README.md) | [English](README_EN.md)
 
 专业的命令行股票监控工具，基于 Bubble Tea 框架构建现代化终端 UI，支持 A 股、美股、港股实时行情追踪与投资组合管理。
+
+> **v7.0 重大更新**: 🏗️ **完整架构重构** - 将项目重构为模块化 `internal/` 包结构（15 个独立包），实现清晰的分层架构（UI → 业务逻辑 → 数据层 → 外部集成），**100% 功能兼容，零性能损失**。所有 v6.0 数据、配置、告警自动兼容！
 
 ---
 
@@ -860,6 +862,7 @@ A股实时数据:  腾讯 API → 新浪 API → 显示 "-"
 
 | 版本 | 发布时间 | 主要更新 | 文档 |
 |------|----------|----------|------|
+| **v7.0** | 2026年1月21日 | 🏗️ 架构重构、模块化 internal/ 包、15个独立包、40+ 单元测试 | [查看详情](doc/changelogs/v7.0.md) |
 | **v6.0** | 2026年1月 | 🔔 股票告警系统、频率控制、批量操作、跨平台通知 | [查看详情](doc/changelogs/v6.0.md) |
 | **v5.8** | 2026年1月 | 📊 结构化日志系统、zap集成、日志轮转、i18n支持 | [查看详情](doc/changelogs/v5.8.md) |
 | v5.7 | 2025年12月 | 🏷️ 自选标签分组系统、位置记忆、边界停留 | [查看详情](doc/changelogs/v5.7.md) |
