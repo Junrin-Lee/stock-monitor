@@ -1,6 +1,6 @@
 # Stock Monitor - 股票监控系统
 
-[![Version](https://img.shields.io/badge/version-v7.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v7.1-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -10,7 +10,9 @@
 
 专业的命令行股票监控工具，基于 Bubble Tea 框架构建现代化终端 UI，支持 A 股、美股、港股实时行情追踪与投资组合管理。
 
-> **v7.0 重大更新**: 🏗️ **完整架构重构** - 将项目重构为模块化 `internal/` 包结构（15 个独立包），实现清晰的分层架构（UI → 业务逻辑 → 数据层 → 外部集成），**100% 功能兼容，零性能损失**。所有 v6.0 数据、配置、告警自动兼容！
+> **v7.1 功能增强**: 🔔 **告警频率编辑** - 支持在编辑告警时修改触发频率（Once ↔ Daily/Weekly/Monthly/EveryNDays），编辑流程扩展至 5 步，智能状态重置，100% 兼容 v7.0！
+
+> **v7.0 架构升级**: 🏗️ **完整架构重构** - 模块化 `internal/` 包结构（15 个独立包），清晰的分层架构（UI → 业务逻辑 → 数据层 → 外部集成），**100% 功能兼容，零性能损失**。所有 v6.0 数据、配置、告警自动兼容！
 
 ---
 

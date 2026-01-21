@@ -1,6 +1,6 @@
 # Stock Monitor - Stock Monitoring System
 
-[![Version](https://img.shields.io/badge/version-v7.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v7.1-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -10,7 +10,9 @@
 
 A professional command-line stock monitoring tool built with the Bubble Tea framework for a modern terminal UI. Supports real-time tracking of A-shares, US stocks, and Hong Kong stocks with portfolio management.
 
-> **v7.0 Major Update**: 🏗️ **Complete Architecture Refactoring** - Restructured the project into a modular `internal/` package structure (15 independent packages) with a clear layered architecture (UI → Business Logic → Data Layer → External Integration), **100% feature compatible with zero performance loss**. All v6.0 data, configuration, and alerts are automatically compatible!
+> **v7.1 Feature Enhancement**: 🔔 **Alert Frequency Editing** - Edit alert trigger frequencies (Once ↔ Daily/Weekly/Monthly/EveryNDays), extended 5-step edit flow, smart state reset, 100% compatible with v7.0!
+
+> **v7.0 Architecture Upgrade**: 🏗️ **Complete Architecture Refactoring** - Modular `internal/` package structure (15 independent packages) with clear layered architecture (UI → Business Logic → Data Layer → External Integration), **100% feature compatible with zero performance loss**. All v6.0 data, configuration, and alerts are automatically compatible!
 
 ---
 

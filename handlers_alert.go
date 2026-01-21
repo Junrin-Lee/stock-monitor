@@ -217,6 +217,10 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectedAlertType = m.currentAlert.Type
 		m.selectedAlertCondition = m.currentAlert.Condition
 		m.alertThreshold = m.currentAlert.Threshold
+		// Initialize frequency fields for editing
+		m.selectedAlertFrequency = m.currentAlert.Frequency
+		m.alertFrequencyDays = m.currentAlert.FrequencyDays
+		m.alertFrequencyCursor = getFrequencyCursorFromValue(m.currentAlert.Frequency)
 
 		m.state = AlertEdit
 		m.alertManageStep = 0
@@ -363,6 +367,10 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectedAlertType = m.currentAlert.Type
 		m.selectedAlertCondition = m.currentAlert.Condition
 		m.alertThreshold = m.currentAlert.Threshold
+		// Initialize frequency fields for editing
+		m.selectedAlertFrequency = m.currentAlert.Frequency
+		m.alertFrequencyDays = m.currentAlert.FrequencyDays
+		m.alertFrequencyCursor = getFrequencyCursorFromValue(m.currentAlert.Frequency)
 
 		m.state = AlertEdit
 		m.alertManageStep = 0
@@ -765,6 +773,10 @@ func (m *Model) handleAlertEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleAlertEditConditionSelect(msg)
 	case 2: // Input threshold
 		return m.handleAlertEditThresholdInput(msg)
+	case 3: // Select trigger frequency
+		return m.handleAlertEditFrequencySelect(msg)
+	case 4: // Input custom days (for EveryNDays)
+		return m.handleAlertEditFrequencyDaysInput(msg)
 	default:
 		return m, nil
 	}
@@ -855,32 +867,10 @@ func (m *Model) handleAlertEditThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cm
 			return m, nil
 		}
 
-		// Update alert
-		for i, alert := range m.alertData.Alerts {
-			if alert.ID == m.currentAlert.ID {
-				m.alertData.Alerts[i].Type = m.selectedAlertType
-				m.alertData.Alerts[i].Condition = m.selectedAlertCondition
-				m.alertData.Alerts[i].Threshold = threshold
-				break
-			}
-		}
-
-		m.saveAlertData()
-		m.message = m.getText("alert.editSuccess")
-
-		// Return to source state
-		if m.previousState == StockAlertManage {
-			m.stockAlertAlerts = m.getStockAlerts(m.stockAlertCode)
-			m.state = StockAlertManage
-		} else {
-			m.state = AlertManage
-		}
-
-		// Reset state
-		m.alertManageStep = 0
-		m.tagSelectCursor = 0
-		m.alertInput = ""
-
+		m.alertThreshold = threshold
+		// Move to frequency selection instead of saving immediately
+		m.alertManageStep = 3
+		// m.alertFrequencyCursor is already initialized at entry
 		return m, nil
 
 	case "backspace":
@@ -900,18 +890,148 @@ func (m *Model) handleAlertEditThresholdInput(msg tea.KeyMsg) (tea.Model, tea.Cm
 	}
 }
 
+// handleAlertEditFrequencySelect handles edit alert frequency selection
+func (m *Model) handleAlertEditFrequencySelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	frequencyOptions := getFrequencyOptions()
+
+	switch msg.String() {
+	case "esc", "q": // Return to previous step
+		m.alertManageStep = 2
+		m.alertInput = fmt.Sprintf("%.2f", m.alertThreshold)
+		return m, nil
+
+	case "up", "k", "w":
+		if m.alertFrequencyCursor > 0 {
+			m.alertFrequencyCursor--
+		}
+		return m, nil
+
+	case "down", "j", "s":
+		if m.alertFrequencyCursor < len(frequencyOptions)-1 {
+			m.alertFrequencyCursor++
+		}
+		return m, nil
+
+	case "enter", " ":
+		m.selectedAlertFrequency = frequencyOptions[m.alertFrequencyCursor]
+
+		if m.selectedAlertFrequency == TriggerEveryNDays {
+			m.alertManageStep = 4
+			// Pre-fill with existing custom days if available
+			if m.alertFrequencyDays > 0 {
+				m.alertInput = fmt.Sprintf("%d", m.alertFrequencyDays)
+			} else {
+				m.alertInput = ""
+			}
+			m.alertInputCursor = 0
+		} else {
+			return m.saveEditedAlert()
+		}
+		return m, nil
+
+	default:
+		return m, nil
+	}
+}
+
+// handleAlertEditFrequencyDaysInput handles edit alert custom days input
+func (m *Model) handleAlertEditFrequencyDaysInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q": // Return to previous step
+		m.alertManageStep = 3
+		m.alertFrequencyCursor = 4
+		return m, nil
+
+	case "enter":
+		var days int
+		_, err := fmt.Sscanf(m.alertInput, "%d", &days)
+		if err != nil || days <= 0 {
+			m.message = m.getText("alert.frequency.invalidDays")
+			return m, nil
+		}
+		m.alertFrequencyDays = days
+		return m.saveEditedAlert()
+
+	case "backspace":
+		if len(m.alertInput) > 0 {
+			m.alertInput = m.alertInput[:len(m.alertInput)-1]
+		}
+		return m, nil
+
+	default:
+		if len(msg.String()) == 1 {
+			char := msg.String()
+			if char >= "0" && char <= "9" {
+				m.alertInput += char
+			}
+		}
+		return m, nil
+	}
+}
+
+// saveEditedAlert saves the edited alert with all updated fields
+func (m *Model) saveEditedAlert() (tea.Model, tea.Cmd) {
+	// Determine if frequency changed from once to periodic
+	wasOnceOrEmpty := m.currentAlert.Frequency == TriggerOnce || m.currentAlert.Frequency == ""
+	nowPeriodic := m.selectedAlertFrequency != TriggerOnce && m.selectedAlertFrequency != ""
+
+	// Update alert
+	for i, alert := range m.alertData.Alerts {
+		if alert.ID == m.currentAlert.ID {
+			m.alertData.Alerts[i].Type = m.selectedAlertType
+			m.alertData.Alerts[i].Condition = m.selectedAlertCondition
+			m.alertData.Alerts[i].Threshold = m.alertThreshold
+			// Update frequency fields
+			m.alertData.Alerts[i].Frequency = m.selectedAlertFrequency
+			m.alertData.Alerts[i].FrequencyDays = m.alertFrequencyDays
+
+			// Handle triggered once-alert converted to periodic
+			if wasOnceOrEmpty && nowPeriodic && !m.alertData.Alerts[i].TriggeredAt.IsZero() {
+				// Reset TriggeredAt to allow immediate re-trigger
+				m.alertData.Alerts[i].TriggeredAt = time.Time{}
+				// Also re-enable the alert if it was disabled
+				m.alertData.Alerts[i].IsActive = true
+			}
+			break
+		}
+	}
+
+	m.saveAlertData()
+	m.message = m.getText("alert.editSuccess")
+
+	// Return to source state
+	if m.previousState == StockAlertManage {
+		m.stockAlertAlerts = m.getStockAlerts(m.stockAlertCode)
+		m.state = StockAlertManage
+	} else {
+		m.state = AlertManage
+	}
+
+	// Reset state
+	m.alertManageStep = 0
+	m.tagSelectCursor = 0
+	m.alertInput = ""
+	m.selectedAlertFrequency = ""
+	m.alertFrequencyDays = 0
+	m.alertFrequencyCursor = 0
+
+	return m, nil
+}
+
 // viewAlertEdit renders edit alert interface
 func (m *Model) viewAlertEdit() string {
 	return alertui.RenderAlertAdd(alertui.AlertAddViewParams{
-		GetText:           m.getText,
-		StockCode:         m.currentAlert.StockCode,
-		StockName:         m.currentAlert.StockName,
-		Step:              m.alertManageStep,
-		TagSelectCursor:   m.tagSelectCursor,
-		SelectedAlertType: types.AlertType(m.selectedAlertType),
-		SelectedCondition: m.selectedAlertCondition,
-		AlertInput:        m.alertInput,
-		Message:           m.message,
+		GetText:              m.getText,
+		StockCode:            m.currentAlert.StockCode,
+		StockName:            m.currentAlert.StockName,
+		Step:                 m.alertManageStep,
+		TagSelectCursor:      m.tagSelectCursor,
+		SelectedAlertType:    types.AlertType(m.selectedAlertType),
+		SelectedCondition:    m.selectedAlertCondition,
+		AlertThreshold:       m.alertThreshold,
+		AlertInput:           m.alertInput,
+		AlertFrequencyCursor: m.alertFrequencyCursor,
+		Message:              m.message,
 	})
 }
 

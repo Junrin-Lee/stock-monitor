@@ -127,3 +127,22 @@ func getFrequencyOptions() []TriggerFrequency {
 	}
 	return result
 }
+
+// getFrequencyCursorFromValue 根据频率类型返回对应的光标位置
+// 用于编辑告警时初始化频率选择器的光标位置
+func getFrequencyCursorFromValue(frequency TriggerFrequency) int {
+	switch frequency {
+	case TriggerOnce:
+		return 0
+	case TriggerDaily:
+		return 1
+	case TriggerWeekly:
+		return 2
+	case TriggerMonthly:
+		return 3
+	case TriggerEveryNDays:
+		return 4
+	default:
+		return 0 // 默认返回 "一次性"
+	}
+}
