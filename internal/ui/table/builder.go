@@ -19,6 +19,7 @@ type Builder struct {
 	sortField    consts.SortField
 	sortDir      consts.SortDirection
 	style        table.Style
+	hasStyle     bool // 标记是否设置了自定义样式
 }
 
 // NewBuilder 创建表格构建器
@@ -77,6 +78,7 @@ func (b *Builder) WithSorting(sorted bool, field consts.SortField, dir consts.So
 // WithStyle 设置表格样式
 func (b *Builder) WithStyle(style table.Style) *Builder {
 	b.style = style
+	b.hasStyle = true
 	return b
 }
 
@@ -85,7 +87,7 @@ func (b *Builder) Build() string {
 	t := table.NewWriter()
 
 	// 应用样式
-	if b.style != (table.Style{}) {
+	if b.hasStyle {
 		t.SetStyle(b.style)
 	} else {
 		t.SetStyle(table.StyleLight)

@@ -8,15 +8,35 @@ import (
 	"stock-monitor/internal/types"
 )
 
+// APIClient 接口定义（用于解耦）
+type APIClient interface {
+	GetStockInfo(code string) *types.StockData
+	GetStockPrice(code string) *types.StockData
+}
+
+// apiClientAdapter 适配器，将包级函数包装为接口实现
+type apiClientAdapter struct{}
+
+func (a *apiClientAdapter) GetStockInfo(code string) *types.StockData {
+	return api.GetStockInfo(code)
+}
+
+func (a *apiClientAdapter) GetStockPrice(code string) *types.StockData {
+	return api.GetStockPrice(code)
+}
+
 // Service 投资组合服务
 type Service struct {
 	repo      *data.PortfolioRepository
-	apiClient *api.Client
-	cache     *data.CacheManager
+	apiClient APIClient
+	cache     *data.StockPriceCache
 }
 
 // NewService 创建投资组合服务
-func NewService(repo *data.PortfolioRepository, apiClient *api.Client, cache *data.CacheManager) *Service {
+func NewService(repo *data.PortfolioRepository, apiClient APIClient, cache *data.StockPriceCache) *Service {
+	if apiClient == nil {
+		apiClient = &apiClientAdapter{}
+	}
 	return &Service{
 		repo:      repo,
 		apiClient: apiClient,
