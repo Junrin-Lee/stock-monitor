@@ -1,4 +1,4 @@
-# Stock Monitor - 股票监控系统
+# Stock Monitor
 
 [![Version](https://img.shields.io/badge/version-v7.1-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
