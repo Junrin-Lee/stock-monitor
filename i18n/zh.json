@@ -532,6 +532,7 @@
   "alertHeaderTriggered": "触发",
   "alertHeaderTriggeredAt": "触发时间",
   "alertHeaderCreated": "创建时间",
+  "alertHeaderUpdatedAt": "更新时间",
   "alertSwitch.on": "✓ 开",
   "alertSwitch.off": "✗ 关",
   "alertTriggered.yes": "已触发",

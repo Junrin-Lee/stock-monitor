@@ -532,6 +532,7 @@
   "alertHeaderTriggered": "Triggered",
   "alertHeaderTriggeredAt": "Triggered At",
   "alertHeaderCreated": "Created",
+  "alertHeaderUpdatedAt": "Updated",
   "alertSwitch.on": "✓ On",
   "alertSwitch.off": "✗ Off",
   "alertTriggered.yes": "Yes",

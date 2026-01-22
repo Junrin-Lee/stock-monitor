@@ -36,6 +36,7 @@ type Alert struct {
 	Frequency     TriggerFrequency `json:"frequency"`      // 触发频率
 	FrequencyDays int              `json:"frequency_days"` // 自定义天数间隔（仅 every_n_days 模式）
 	CreatedAt     time.Time        `json:"created_at"`     // 创建时间
+	UpdatedAt     time.Time        `json:"updated_at"`     // 最近更新时间
 	TriggeredAt   time.Time        `json:"triggered_at"`   // 最后触发时间
 	LastChecked   time.Time        `json:"last_checked"`   // 最后检查时间
 	BatchTag      string           `json:"batch_tag"`      // 批量标签名（批量添加时）

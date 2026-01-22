@@ -51,6 +51,7 @@ func RenderAlertManage(params AlertManageViewParams) string {
 		params.GetText("alertHeaderFrequency"),
 		params.GetText("alertHeaderTriggeredAt"),
 		params.GetText("alertHeaderCreated"),
+		params.GetText("alertHeaderUpdatedAt"),
 	})
 
 	// Calculate display range (pagination)
@@ -89,6 +90,12 @@ func RenderAlertManage(params AlertManageViewParams) string {
 		// Type text
 		typeText := GetAlertTypeText(alert.Type, params.GetText)
 
+		// Updated time
+		updatedText := "-"
+		if !alert.UpdatedAt.IsZero() {
+			updatedText = alert.UpdatedAt.Format("2006-01-02 15:04:05")
+		}
+
 		// Cursor marker
 		cursor := "  "
 		if i == params.AlertCursor {
@@ -105,6 +112,7 @@ func RenderAlertManage(params AlertManageViewParams) string {
 			frequencyText,
 			triggeredText,
 			alert.CreatedAt.Format("2006-01-02 15:04:05"),
+			updatedText,
 		}
 
 		t.AppendRow(row)
@@ -182,6 +190,7 @@ func RenderStockAlertManage(params StockAlertViewParams) string {
 		params.GetText("alertHeaderFrequency"),
 		params.GetText("alertHeaderTriggeredAt"),
 		params.GetText("alertHeaderCreated"),
+		params.GetText("alertHeaderUpdatedAt"),
 	})
 
 	// Calculate display range

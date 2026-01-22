@@ -259,6 +259,7 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		m.alertData.Alerts[m.alertCursor].IsActive = !m.alertData.Alerts[m.alertCursor].IsActive
+		m.alertData.Alerts[m.alertCursor].UpdatedAt = time.Now()
 		m.saveAlertData()
 
 		alert := m.alertData.Alerts[m.alertCursor]
@@ -426,6 +427,7 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		for i := range m.alertData.Alerts {
 			if m.alertData.Alerts[i].ID == alertID {
 				m.alertData.Alerts[i].IsActive = !m.alertData.Alerts[i].IsActive
+				m.alertData.Alerts[i].UpdatedAt = time.Now()
 				m.stockAlertAlerts[m.stockAlertCursor].IsActive = m.alertData.Alerts[i].IsActive
 				break
 			}
@@ -984,6 +986,8 @@ func (m *Model) saveEditedAlert() (tea.Model, tea.Cmd) {
 			// Update frequency fields
 			m.alertData.Alerts[i].Frequency = m.selectedAlertFrequency
 			m.alertData.Alerts[i].FrequencyDays = m.alertFrequencyDays
+			// Update timestamp
+			m.alertData.Alerts[i].UpdatedAt = time.Now()
 
 			// Handle triggered once-alert converted to periodic
 			if wasOnceOrEmpty && nowPeriodic && !m.alertData.Alerts[i].TriggeredAt.IsZero() {
