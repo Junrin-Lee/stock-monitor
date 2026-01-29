@@ -13,7 +13,7 @@ import (
 
 type (
 	// 数据配置类型 - 使用别名（无需添加方法）
-	Config = types.Config
+	Config                   = types.Config
 	SystemConfig             = types.SystemConfig
 	DisplayConfig            = types.DisplayConfig
 	UpdateConfig             = types.UpdateConfig
@@ -191,7 +191,7 @@ type StockPriceCacheEntry struct {
 type Model struct {
 	state           AppState
 	currentMenuItem int
-	menuItems       []string
+	menuItems       []MenuItem
 	cursor          int
 	input           string
 	inputCursor     int // 通用输入框光标位置
@@ -200,6 +200,7 @@ type Model struct {
 	watchlist       Watchlist // 自选股票列表
 	config          Config    // 系统配置
 	language        Language
+	maxLines        int // 列表每页显示行数
 
 	// For stock addition
 	addingStep         int
@@ -322,6 +323,30 @@ type Model struct {
 	selectedAlertFrequency TriggerFrequency // 选中的触发频率
 	alertFrequencyDays     int              // 自定义天数间隔
 	alertFrequencyCursor   int              // 频率选择光标
+
+	// For sector viewing - 板块行情相关字段
+	sectorType           types.SectorType                             // 当前板块类型 (行业/概念)
+	sectorList           []types.Sector                               // 板块列表
+	sectorCursor         int                                          // 板块列表光标
+	sectorScrollPos      int                                          // 板块列表滚动位置
+	sectorSortField      SortField                                    // 板块排序字段
+	sectorSortDirection  SortDirection                                // 板块排序方向
+	sectorIsSorted       bool                                         // 板块是否已排序
+	currentSectorCode    string                                       // 当前查看的板块代码
+	currentSectorName    string                                       // 当前查看的板块名称
+	currentSectorInfo    *types.Sector                                // 当前板块信息
+	sectorStocks         []types.SectorStock                          // 成分股列表
+	sectorStockCursor    int                                          // 成分股光标
+	sectorStockScrollPos int                                          // 成分股滚动位置
+	sectorCache          map[types.SectorType]*types.SectorCacheEntry // 板块缓存
+	sectorCacheMutex     sync.RWMutex                                 // 板块缓存读写锁
+	sortMenuCursor       int                                          // 排序菜单光标(复用)
+}
+
+// MenuItem 菜单项结构
+type MenuItem struct {
+	Key   string // i18n 键，如 "language", "stockList"
+	Label string // 显示文本
 }
 
 // tickMsg 定时刷新消息

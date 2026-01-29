@@ -1,6 +1,9 @@
 package main
 
 import (
+	"sort"
+
+	"stock-monitor/internal/consts"
 	internalSort "stock-monitor/internal/sort"
 	"stock-monitor/internal/types"
 )
@@ -137,4 +140,77 @@ func (m *Model) optimizedSortWatchlist(field SortField, direction SortDirection)
 		newStocks = append(newStocks, remainingStocks...)
 		m.watchlist.Stocks = newStocks
 	}
+}
+
+// ============================================================================
+// Sector Sorting Functions - 板块排序
+// ============================================================================
+
+// sortSectors 板块列表排序
+func sortSectors(sectors []types.Sector, field SortField, direction SortDirection) {
+	if len(sectors) == 0 {
+		return
+	}
+
+	// 使用 Go 标准库 sort
+	sort.Slice(sectors, func(i, j int) bool {
+		var less bool
+		switch field {
+		case consts.SortBySectorName:
+			less = sectors[i].Name < sectors[j].Name
+		case consts.SortBySectorChangePercent:
+			less = sectors[i].ChangePercent < sectors[j].ChangePercent
+		case consts.SortBySectorChange:
+			less = sectors[i].Change < sectors[j].Change
+		case consts.SortBySectorTurnover:
+			less = sectors[i].Turnover < sectors[j].Turnover
+		case consts.SortByTurnoverRate:
+			less = sectors[i].TurnoverRate < sectors[j].TurnoverRate
+		case consts.SortBySectorRiseCount:
+			less = sectors[i].RiseCount < sectors[j].RiseCount
+		default:
+			less = sectors[i].Name < sectors[j].Name
+		}
+
+		if direction == consts.SortDesc {
+			return !less
+		}
+		return less
+	})
+}
+
+// sortSectorStocks 成分股列表排序
+func sortSectorStocks(stocks []types.SectorStock, field SortField, direction SortDirection) {
+	if len(stocks) == 0 {
+		return
+	}
+
+	sort.Slice(stocks, func(i, j int) bool {
+		var less bool
+		switch field {
+		case consts.SortByCode:
+			less = stocks[i].Code < stocks[j].Code
+		case consts.SortByName:
+			less = stocks[i].Name < stocks[j].Name
+		case consts.SortByPrice:
+			less = stocks[i].Price < stocks[j].Price
+		case consts.SortByChangePercent:
+			less = stocks[i].ChangePercent < stocks[j].ChangePercent
+		case consts.SortByChange:
+			less = stocks[i].Change < stocks[j].Change
+		case consts.SortByVolume:
+			less = stocks[i].Volume < stocks[j].Volume
+		case consts.SortBySectorTurnover:
+			less = stocks[i].Turnover < stocks[j].Turnover
+		case consts.SortByTurnoverRate:
+			less = stocks[i].TurnoverRate < stocks[j].TurnoverRate
+		default:
+			less = stocks[i].Name < stocks[j].Name
+		}
+
+		if direction == consts.SortDesc {
+			return !less
+		}
+		return less
+	})
 }

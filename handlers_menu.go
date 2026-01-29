@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"stock-monitor/internal/consts"
 )
 
 // ========== Main Menu Handlers ==========
@@ -31,8 +32,15 @@ func (m *Model) handleMainMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // executeMenuItem executes the selected menu item
 func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 	m.message = "" // 清除之前的消息
-	switch m.currentMenuItem {
-	case 0: // 股票列表
+
+	if m.currentMenuItem >= len(m.menuItems) {
+		return m, nil
+	}
+
+	item := m.menuItems[m.currentMenuItem]
+
+	switch item.Key {
+	case "stockList": // 股票列表
 		logInfo("log.action.enterPortfolio")
 		m.state = Monitoring
 		m.resetPortfolioCursor() // 重置游标到第一只股票
@@ -42,7 +50,8 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 		m.startIntradayDataCollection()
 
 		return m, m.tickCmd()
-	case 1: // 自选股票
+
+	case "watchlist": // 自选股票
 		logInfo("log.action.enterWatchlist")
 		m.state = WatchlistViewing
 		m.resetWatchlistCursor() // 重置游标到第一只股票
@@ -63,7 +72,8 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 		}
 
 		return m, tea.Batch(cmds...)
-	case 2: // 股票搜索
+
+	case "stockSearch": // 股票搜索
 		logInfo("log.action.enterSearch")
 		m.state = SearchingStock
 		m.searchInput = ""
@@ -71,13 +81,23 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 		m.searchFromWatchlist = false
 		m.message = ""
 		return m, nil
-	case 3: // 告警管理
+
+	case "alertManagement": // 告警管理
 		logInfo("log.action.enterAlertManagement")
 		m.state = AlertManage
 		m.alertCursor = 0
 		m.alertData = loadAlertData()
 		return m, nil
-	case 4: // 语言选择页面
+
+	case "sector.title": // 板块行情
+		logInfo("log.action.enterSector")
+		m.state = consts.SectorViewing
+		m.sectorCursor = 0
+		m.message = ""
+		// TODO: Add sector data initialization if needed
+		return m, nil
+
+	case "language": // 语言选择
 		logInfo("log.action.enterLanguage")
 		m.state = LanguageSelection
 		m.languageCursor = 0
@@ -85,12 +105,14 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 			m.languageCursor = 1
 		}
 		return m, nil
-	case 5: // 退出
+
+	case "exit": // 退出
 		logInfo("log.action.exit")
 		m.savePortfolio()
 		m.saveWatchlist()
 		return m, tea.Quit
 	}
+
 	return m, nil
 }
 
@@ -104,14 +126,15 @@ func (m *Model) viewMainMenu() string {
 			prefix = "► "
 		}
 
-		if i == 4 { // 语言选择
+		// 基于 Key 识别语言选项，显示当前语言状态
+		if item.Key == "language" {
 			langStatus := m.getText("english")
 			if m.language == Chinese {
 				langStatus = m.getText("chinese")
 			}
-			s += fmt.Sprintf("%s%s: %s\n", prefix, item, langStatus)
+			s += fmt.Sprintf("%s%s: %s\n", prefix, item.Label, langStatus)
 		} else {
-			s += fmt.Sprintf("%s%s\n", prefix, item)
+			s += fmt.Sprintf("%s%s\n", prefix, item.Label)
 		}
 	}
 
@@ -156,8 +179,8 @@ func (m *Model) handleLanguageSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if err := saveConfig(m.config); err != nil {
 			m.message = fmt.Sprintf("Warning: Failed to save config: %v", err)
 		}
-		// 更新菜单项
-		m.menuItems = m.getMenuItems()
+		// 更新菜单项以反映新语言
+		m.menuItems = getMenuItems(m.language)
 		m.state = MainMenu
 		m.message = ""
 		return m, nil

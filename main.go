@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"stock-monitor/internal/app"
+	"stock-monitor/internal/consts"
 	"stock-monitor/internal/types"
 	"stock-monitor/internal/ui"
 	"stock-monitor/internal/ui/watchlist"
@@ -42,15 +43,16 @@ func convertStockData(data *types.StockData) *StockData {
 // 获取主菜单项
 // i18n 相关函数已移动到 i18n.go
 
-// 获取主菜单项
-func (m *Model) getMenuItems() []string {
-	return []string{
-		m.getText("stockList"),
-		m.getText("watchlist"),
-		m.getText("stockSearch"),
-		m.getText("alertManagement"),
-		m.getText("language"),
-		m.getText("exit"),
+// getMenuItems 获取主菜单项列表
+func getMenuItems(lang Language) []MenuItem {
+	return []MenuItem{
+		{Key: "stockList", Label: getTextForLang("stockList", lang)},
+		{Key: "watchlist", Label: getTextForLang("watchlist", lang)},
+		{Key: "stockSearch", Label: getTextForLang("stockSearch", lang)},
+		{Key: "alertManagement", Label: getTextForLang("alertManagement", lang)},
+		{Key: "sector.title", Label: getTextForLang("sector.title", lang)},
+		{Key: "language", Label: getTextForLang("language", lang)},
+		{Key: "exit", Label: getTextForLang("exit", lang)},
 	}
 }
 
@@ -121,6 +123,7 @@ func main() {
 		watchlist:          watchlist,
 		config:             config,
 		language:           language,
+		maxLines:           config.Display.MaxLines, // 从配置读取每页显示行数
 		lastUpdate:         lastUpdate,
 		alertData:          loadAlertData(), // 启动时加载告警数据
 		portfolioScrollPos: 0,               // 持股列表滚动位置
@@ -132,10 +135,14 @@ func main() {
 		// 股价缓存初始化
 		stockPriceCache:      make(map[string]*StockPriceCacheEntry),
 		stockPriceUpdateTime: time.Time{}, // 初始化为零时间
+		// 板块缓存初始化
+		sectorCache:    make(map[types.SectorType]*types.SectorCacheEntry),
+		sectorType:     types.SectorTypeIndustry, // 默认行业板块
+		sectorIsSorted: false,
 	}
 
 	// 根据语言设置菜单项
-	m.menuItems = m.getMenuItems()
+	m.menuItems = getMenuItems(m.language)
 
 	// 设置全局模型引用用于调试日志
 	globalModel = &m
@@ -245,6 +252,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newModel, cmd = m.handleInputBatchCodes(msg)
 		case AlertBatchAdd:
 			newModel, cmd = m.handleAlertBatchAdd(msg)
+		case AlertTypeSelect:
+			newModel, cmd = m.handleAlertTypeSelect(msg)
+		case AlertThresholdInput:
+			newModel, cmd = m.handleAlertThresholdInput(msg)
+		case AlertConditionSelect:
+			newModel, cmd = m.handleAlertConditionSelect(msg)
+		case AlertFrequencySelect:
+			newModel, cmd = m.handleAlertFrequencySelectStep(msg)
+		case AlertFrequencyDaysInput:
+			newModel, cmd = m.handleAlertFrequencyDaysInput(msg)
+		case consts.SectorViewing:
+			newModel, cmd = m.handleSectorViewing(msg)
+		case consts.SectorStockList:
+			newModel, cmd = m.handleSectorStockList(msg)
+		case consts.SectorSorting:
+			newModel, cmd = m.handleSectorSorting(msg)
 		default:
 			newModel, cmd = m, nil
 		}
@@ -266,6 +289,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, func() tea.Msg {
 					return checkAlertsMsg{}
 				})
+			}
+
+			newModel, cmd = m, tea.Batch(cmds...)
+		} else if m.state == consts.SectorViewing || m.state == consts.SectorStockList {
+			// 板块页面5秒刷新
+			var cmds []tea.Cmd
+			cmds = append(cmds, m.tickCmd())
+
+			// 刷新板块数据
+			if m.state == consts.SectorViewing {
+				cmds = append(cmds, m.fetchSectorListCmd(m.sectorType))
+			} else if m.state == consts.SectorStockList && m.currentSectorCode != "" {
+				cmds = append(cmds, m.fetchSectorStocksCmd(m.currentSectorCode))
 			}
 
 			newModel, cmd = m, tea.Batch(cmds...)
@@ -343,6 +379,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			newModel, cmd = m, nil
 		}
+	case SectorListMsg:
+		// 板块列表数据返回
+		if msg.Err == nil && msg.Sectors != nil {
+			m.sectorList = msg.Sectors
+			// 默认按名称升序排序
+			if !m.sectorIsSorted {
+				m.sectorSortField = consts.SortBySectorName
+				m.sectorSortDirection = consts.SortAsc
+				m.sortSectorList()
+			}
+		} else if msg.Err != nil {
+			logError("获取板块列表失败: %v", msg.Err)
+			m.message = fmt.Sprintf("获取板块列表失败: %v", msg.Err)
+		}
+		newModel, cmd = m, nil
+	case SectorStocksMsg:
+		// 成分股列表数据返回
+		if msg.Err == nil && msg.Stocks != nil {
+			m.sectorStocks = msg.Stocks
+			// 默认按名称升序排序
+			if !m.sectorIsSorted {
+				m.sectorSortField = consts.SortByName
+				m.sectorSortDirection = consts.SortAsc
+				m.sortSectorStocks()
+			}
+		} else if msg.Err != nil {
+			logError("获取成分股列表失败: %v", msg.Err)
+			m.message = fmt.Sprintf("获取成分股列表失败: %v", msg.Err)
+		}
+		newModel, cmd = m, nil
 	case searchIntradayUpdateMsg:
 		// 搜索模式分时数据更新，触发 UI 重新渲染
 		// 继续监听下一次更新
@@ -429,6 +495,22 @@ func (m *Model) View() string {
 		mainContent = m.viewInputBatchCodes()
 	case AlertBatchAdd:
 		mainContent = m.viewAlertBatchAdd()
+	case consts.AlertTypeSelect:
+		mainContent = m.viewAlertAdd() // AlertTypeSelect复用viewAlertAdd
+	case consts.AlertThresholdInput:
+		mainContent = m.viewAlertAdd() // AlertThresholdInput复用viewAlertAdd
+	case consts.AlertConditionSelect:
+		mainContent = m.viewAlertAdd() // AlertConditionSelect复用viewAlertAdd
+	case consts.AlertFrequencySelect:
+		mainContent = m.viewAlertAdd() // AlertFrequencySelect复用viewAlertAdd
+	case consts.AlertFrequencyDaysInput:
+		mainContent = m.viewAlertAdd() // AlertFrequencyDaysInput复用viewAlertAdd
+	case consts.SectorViewing:
+		mainContent = m.viewSectorViewing()
+	case consts.SectorStockList:
+		mainContent = m.viewSectorStockList()
+	case consts.SectorSorting:
+		mainContent = m.viewSectorSorting()
 	default:
 		mainContent = ""
 	}

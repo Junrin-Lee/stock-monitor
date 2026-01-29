@@ -55,3 +55,15 @@ func (m *Model) getText(key string) string {
 	}
 	return key // 最后备用返回key本身
 }
+
+// getTextForLang 获取指定语言的本地化文本（用于初始化时无Model实例的场景）
+func getTextForLang(key string, lang Language) string {
+	if text, exists := texts[lang][key]; exists {
+		return text
+	}
+	// 如果找不到文本，返回英文版本作为备用
+	if text, exists := texts[English][key]; exists {
+		return text
+	}
+	return key // 最后备用返回key本身
+}

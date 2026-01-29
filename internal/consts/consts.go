@@ -60,25 +60,34 @@ const (
 	AlertBatchAdd            // 批量添加告警状态
 	AlertFrequencySelect     // 选择告警触发频率状态
 	AlertFrequencyDaysInput  // 输入自定义天数状态
+	SectorViewing            // 板块列表查看状态
+	SectorStockList          // 板块成分股列表状态
+	SectorSorting            // 板块排序状态
+	SectorTypeSelect         // 板块类型选择状态
 )
 
 // 排序字段枚举
 type SortField int
 
 const (
-	SortByCode          SortField = iota // 股票代码
-	SortByName                           // 股票名称
-	SortByPrice                          // 现价
-	SortByCostPrice                      // 成本价
-	SortByChange                         // 涨跌额
-	SortByChangePercent                  // 涨跌幅
-	SortByQuantity                       // 持股数量
-	SortByTotalProfit                    // 持仓盈亏
-	SortByProfitRate                     // 盈亏率
-	SortByMarketValue                    // 市值
-	SortByTag                            // 标签 (仅自选列表)
-	SortByTurnoverRate                   // 换手率 (仅自选列表)
-	SortByVolume                         // 成交量 (仅自选列表)
+	SortByCode                SortField = iota // 股票代码
+	SortByName                                 // 股票名称
+	SortByPrice                                // 现价
+	SortByCostPrice                            // 成本价
+	SortByChange                               // 涨跌额
+	SortByChangePercent                        // 涨跌幅
+	SortByQuantity                             // 持股数量
+	SortByTotalProfit                          // 持仓盈亏
+	SortByProfitRate                           // 盈亏率
+	SortByMarketValue                          // 市值
+	SortByTag                                  // 标签 (仅自选列表)
+	SortByTurnoverRate                         // 换手率 (仅自选列表)
+	SortByVolume                               // 成交量 (仅自选列表)
+	SortBySectorName                           // 板块名称 (仅板块列表)
+	SortBySectorChange                         // 板块涨跌额 (仅板块列表)
+	SortBySectorChangePercent                  // 板块涨跌幅 (仅板块列表)
+	SortBySectorTurnover                       // 板块成交额 (仅板块列表)
+	SortBySectorRiseCount                      // 板块上涨家数 (仅板块列表)
 )
 
 // 排序方向枚举
