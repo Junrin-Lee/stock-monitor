@@ -65,7 +65,7 @@ func (m *Model) handleMonitoringActions(msg tea.KeyMsg) (tea.Model, tea.Cmd, boo
 		removedStock := m.portfolio.Stocks[m.portfolioCursor]
 		m.portfolio.Stocks = append(m.portfolio.Stocks[:m.portfolioCursor], m.portfolio.Stocks[m.portfolioCursor+1:]...)
 		m.savePortfolio()
-		m.portfolioIsSorted = false // Reset sort state after deletion
+		// 删除后无需重新排序(相对顺序不变),保持排序状态
 		// Adjust cursor position
 		if m.portfolioCursor >= len(m.portfolio.Stocks) && len(m.portfolio.Stocks) > 0 {
 			m.portfolioCursor = len(m.portfolio.Stocks) - 1
@@ -448,7 +448,11 @@ func (m *Model) processAddingStep() (tea.Model, tea.Cmd) {
 
 		m.portfolio.Stocks = append(m.portfolio.Stocks, stock)
 		m.savePortfolio()
-		m.portfolioIsSorted = false // Reset sort state after adding
+		// 如果之前已排序,重新应用排序以保持顺序
+		if m.portfolioIsSorted {
+			m.updatePortfolioPricesFromCache()
+			m.optimizedSortPortfolio(m.portfolioSortField, m.portfolioSortDirection)
+		}
 
 		// Determine jump target based on source
 		if m.fromSearch {
@@ -591,7 +595,11 @@ func (m *Model) processEditingStep() (tea.Model, tea.Cmd) {
 		} else {
 			m.portfolio.Stocks[m.selectedStockIndex].Quantity = newQuantity
 			m.savePortfolio()
-			m.portfolioIsSorted = false // Reset sort state after modification
+			// 如果之前已排序且排序字段可能受影响,重新排序
+			if m.portfolioIsSorted {
+				m.updatePortfolioPricesFromCache()
+				m.optimizedSortPortfolio(m.portfolioSortField, m.portfolioSortDirection)
+			}
 
 			stockName := m.portfolio.Stocks[m.selectedStockIndex].Name
 			// Determine where to return based on previous state
