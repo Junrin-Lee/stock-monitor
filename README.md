@@ -1,6 +1,6 @@
 # Stock Monitor
 
-[![Version](https://img.shields.io/badge/version-v7.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v8.0-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -143,6 +143,7 @@ Supported code formats:
 | **Real-time Monitoring** | Auto-refresh stock prices every 5 seconds, capture every trading moment |
 | **Portfolio Management** | Complete position management with add, edit, delete operations |
 | **Watchlist** | Independent stock watch list with multi-tag grouping and portfolio highlighting |
+| **Sector Market** 📊 | Browse sector performance (regional, industry, concept) with real-time data |
 | **Intraday Charts** | View intraday price charts in terminal using Braille character rendering |
 | **Alert System** ⏰ | Price/change percent/volume alerts with 5 trigger frequencies, cross-platform notifications |
 | **Global Markets** | Support for A-shares, US stocks, Hong Kong stocks |
@@ -229,6 +230,7 @@ More shortcuts: [⌨️ Keyboard Shortcuts](doc/guides/keyboard-shortcuts.md)
 
 ### 📋 Version History
 
+- [v8.0](doc/changelogs/v8.0.md) - Sector market view
 - [v7.1](doc/changelogs/v7.1.md) - Alert frequency editing
 - [v7.0](doc/changelogs/v7.0.md) - Architecture refactoring
 - [v6.0](doc/changelogs/v6.0.md) - Alert system release

@@ -1,6 +1,6 @@
 # Stock Monitor
 
-[![Version](https://img.shields.io/badge/version-v7.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v8.0-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -141,8 +141,9 @@ go build -o cmd/stock-monitor
 | 功能 | 说明 |
 |------|------|
 | **实时监控** | 5 秒间隔自动刷新股价，掌握每个交易时刻 |
-| **投资组合** | 完整的持仓管理，支持添加、修改、删除 |
+| **投资组合** | 完整的持仓管理,支持添加、修改、删除 |
 | **自选列表** | 独立的股票关注列表，支持多标签分组 |
+| **板块市场** 📊 | 浏览板块行情（地域、行业、概念）实时数据 |
 | **分时图表** | 终端内查看分时走势图，Braille 字符渲染 |
 | **告警系统** ⏰ | 价格/涨跌幅/成交量告警，5 种触发频率，跨平台通知 |
 | **全球市场** | 支持 A 股、美股、港股等主流市场 |
@@ -229,6 +230,7 @@ go build -o cmd/stock-monitor
 
 ### 📋 版本历史
 
+- [v8.0](doc/changelogs/v8.0.md) - 板块市场查看
 - [v7.1](doc/changelogs/v7.1.md) - 告警频率编辑
 - [v7.0](doc/changelogs/v7.0.md) - 架构重构、模块化
 - [v6.0](doc/changelogs/v6.0.md) - 告警系统发布
