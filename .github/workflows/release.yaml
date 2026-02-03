@@ -54,9 +54,21 @@ jobs:
 
       - name: Extract and create DMG
         run: |
+          # List downloaded files for debugging
+          echo "Contents of dist directory:"
+          ls -la dist/
+
+          # Find the Darwin universal tarball
+          TARBALL=$(find dist -name "*Darwin_universal.tar.gz" -type f | head -n 1)
+          echo "Found tarball: $TARBALL"
+
           # Extract Universal Binary
           mkdir -p dmg-contents
-          tar -xzf dist/stock-monitor_*_Darwin_universal.tar.gz -C dmg-contents
+          tar -xzf "$TARBALL" -C dmg-contents
+
+          # Verify extraction
+          echo "Contents of dmg-contents:"
+          ls -la dmg-contents/
 
           # Create DMG
           create-dmg \
