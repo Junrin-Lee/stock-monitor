@@ -42,7 +42,7 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 	switch item.Key {
 	case "stockList": // 股票列表
 		logInfo("log.action.enterPortfolio")
-		m.state = Monitoring
+		m.state = consts.Monitoring
 		m.resetPortfolioCursor() // 重置游标到第一只股票
 		m.lastUpdate = time.Now()
 
@@ -53,7 +53,7 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 
 	case "watchlist": // 自选股票
 		logInfo("log.action.enterWatchlist")
-		m.state = WatchlistViewing
+		m.state = consts.WatchlistViewing
 		m.resetWatchlistCursor() // 重置游标到第一只股票
 		m.cursor = 0
 		m.message = ""
@@ -75,7 +75,7 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 
 	case "stockSearch": // 股票搜索
 		logInfo("log.action.enterSearch")
-		m.state = SearchingStock
+		m.state = consts.SearchingStock
 		m.searchInput = ""
 		m.searchResult = nil
 		m.searchFromWatchlist = false
@@ -84,7 +84,7 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 
 	case "alertManagement": // 告警管理
 		logInfo("log.action.enterAlertManagement")
-		m.state = AlertManage
+		m.state = consts.AlertManage
 		m.alertCursor = 0
 		m.alertData = loadAlertData()
 		return m, nil
@@ -93,15 +93,21 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 		logInfo("log.action.enterSector")
 		m.state = consts.SectorViewing
 		m.sectorCursor = 0
+		m.sectorScrollPos = 0
 		m.message = ""
-		// TODO: Add sector data initialization if needed
-		return m, nil
+		m.lastUpdate = time.Now()
+
+		// 启动定时刷新并获取初始板块数据
+		var cmds []tea.Cmd
+		cmds = append(cmds, m.tickCmd())                       // 启动定时刷新循环
+		cmds = append(cmds, m.fetchSectorListCmd(m.sectorType)) // 立即获取板块数据
+		return m, tea.Batch(cmds...)
 
 	case "language": // 语言选择
 		logInfo("log.action.enterLanguage")
-		m.state = LanguageSelection
+		m.state = consts.LanguageSelection
 		m.languageCursor = 0
-		if m.language == English {
+		if m.language == consts.English {
 			m.languageCursor = 1
 		}
 		return m, nil
@@ -129,7 +135,7 @@ func (m *Model) viewMainMenu() string {
 		// 基于 Key 识别语言选项，显示当前语言状态
 		if item.Key == "language" {
 			langStatus := m.getText("english")
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				langStatus = m.getText("chinese")
 			}
 			s += fmt.Sprintf("%s%s: %s\n", prefix, item.Label, langStatus)
@@ -159,20 +165,20 @@ func (m *Model) viewMainMenu() string {
 func (m *Model) handleLanguageSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
-		m.state = MainMenu
+		m.state = consts.MainMenu
 		m.message = "" // 清除消息
 		return m, nil
 	case "up", "k", "w":
 		m.languageCursor = MoveCursorUp(m.languageCursor)
 	case "down", "j", "s":
-		m.languageCursor = MoveCursorDown(m.languageCursor, 1) // 0: Chinese, 1: English
+		m.languageCursor = MoveCursorDown(m.languageCursor, 1) // 0: consts.Chinese, 1: consts.English
 	case "enter", " ":
 		// 选择语言
 		if m.languageCursor == 0 {
-			m.language = Chinese
+			m.language = consts.Chinese
 			m.config.System.Language = "zh"
 		} else {
-			m.language = English
+			m.language = consts.English
 			m.config.System.Language = "en"
 		}
 		// 保存配置到文件
@@ -181,7 +187,7 @@ func (m *Model) handleLanguageSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		// 更新菜单项以反映新语言
 		m.menuItems = getMenuItems(m.language)
-		m.state = MainMenu
+		m.state = consts.MainMenu
 		m.message = ""
 		return m, nil
 	}
@@ -193,10 +199,10 @@ func (m *Model) viewLanguageSelection() string {
 	s := m.getText("languageTitle") + "\n\n"
 	s += m.getText("selectLanguage") + "\n\n"
 
-	// 语言选项
+	// 语言选项 - 使用 i18n 系统获取翻译文本
 	languages := []string{
-		"中文简体",
-		"English",
+		m.getText("chinese"),
+		m.getText("english"),
 	}
 
 	for i, lang := range languages {
