@@ -16,111 +16,146 @@ A professional command-line stock monitoring tool built with the Bubble Tea fram
 
 ---
 
-## ⚡ 5-Minute Quick Start
+## ⚡ Quick Installation
 
-### 1. Install Go
+Choose your operating system and start using Stock Monitor in one minute!
 
-First, you need to install **Go 1.25.0 or higher**.
+### macOS
 
-#### macOS - Using Homebrew (Recommended)
+**Option 1: Homebrew (Recommended ⭐)**
 
 ```bash
-# Install Homebrew (if not installed)
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# Add tap and install
+brew tap Junrin-Lee/stock-monitor https://github.com/Junrin-Lee/stock-monitor.git
+brew install stock-monitor
 
-# Install Go
-brew install go
+# Run
+stock-monitor
 
-# Verify installation
-go version  # Should see go version go1.25.0 or higher
+# Upgrade to latest version
+brew upgrade stock-monitor
+```
+
+**Option 2: DMG Installer**
+
+1. Download `stock-monitor_vX.X.X_macOS_universal.dmg` from [Releases](https://github.com/Junrin-Lee/stock-monitor/releases)
+2. Double-click to open the DMG file
+3. Drag `stock-monitor` to `/Applications` or any other directory
+4. First run: Right-click → Open (to bypass Gatekeeper warning)
+
+**Option 3: Manual Install**
+
+```bash
+# Download latest version (replace vX.X.X with actual version)
+curl -LO https://github.com/Junrin-Lee/stock-monitor/releases/latest/download/stock-monitor_vX.X.X_macOS_universal.tar.gz
+tar -xzf stock-monitor_vX.X.X_macOS_universal.tar.gz
+
+# Move to PATH
+sudo mv stock-monitor /usr/local/bin/
+
+# Run
+stock-monitor
 ```
 
 **macOS Additional Setup - Install terminal-notifier (for alert notifications)**
 
-Stock Monitor's alert system requires the `terminal-notifier` tool on macOS to send system notifications.
-
 ```bash
-# Install using Homebrew (recommended)
 brew install terminal-notifier
-
-# Verify installation
-which terminal-notifier  # Should show the installation path
-
-# Test notification functionality
-terminal-notifier -message "Test notification" -title "Stock Monitor"
 ```
 
-> **Why do you need terminal-notifier?**
-> - Stock Monitor's alert system sends macOS system notifications through it
-> - Without it, alerts still display in the app but won't show system notifications
-> - After installation, notifications will appear in the top-right corner with sound
+> 💡 The alert system requires `terminal-notifier` for system notifications. Without it, alerts still display in the app but won't show system notifications.
 
-> **More info**: [Homebrew - terminal-notifier](https://formulae.brew.sh/formula/terminal-notifier#default)
+---
 
-#### Windows - Download Installer
+### Linux
 
-1. Visit [golang.org/dl](https://golang.org/dl)
-2. Download the **Windows x64** installer version
-3. Double-click the `.msi` file and follow the installation prompts
-4. Restart your computer for the changes to take effect
-5. Open PowerShell to verify:
-   ```powershell
-   go version
-   ```
+**Debian / Ubuntu (Recommended ⭐)**
 
-#### Linux - Using Package Manager or Official Download
-
-**Ubuntu/Debian:**
 ```bash
-# Method 1: Using package manager (recommended for simplicity)
-sudo apt-get update
-sudo apt-get install golang-go
+# Download .deb package (replace vX.X.X with actual version)
+wget https://github.com/Junrin-Lee/stock-monitor/releases/latest/download/stock-monitor_vX.X.X_linux_amd64.deb
 
-# Method 2: Download from official source (recommended for latest version)
-wget https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
-export PATH=$PATH:/usr/local/go/bin
+# Install
+sudo dpkg -i stock-monitor_vX.X.X_linux_amd64.deb
 
-# Verify installation
+# Run
+stock-monitor
+```
+
+**RHEL / Fedora / CentOS**
+
+```bash
+# Download .rpm package
+wget https://github.com/Junrin-Lee/stock-monitor/releases/latest/download/stock-monitor_vX.X.X_linux_amd64.rpm
+
+# Install
+sudo rpm -i stock-monitor_vX.X.X_linux_amd64.rpm
+
+# Run
+stock-monitor
+```
+
+**Other Distributions (tar.gz)**
+
+```bash
+# Download and extract
+wget https://github.com/Junrin-Lee/stock-monitor/releases/latest/download/stock-monitor_vX.X.X_Linux_x86_64.tar.gz
+tar -xzf stock-monitor_vX.X.X_Linux_x86_64.tar.gz
+
+# Move to PATH
+sudo mv stock-monitor /usr/local/bin/
+
+# Run
+stock-monitor
+```
+
+---
+
+### Windows
+
+1. Download `stock-monitor_vX.X.X_Windows_x86_64.zip` from [Releases](https://github.com/Junrin-Lee/stock-monitor/releases)
+2. Extract to any directory (e.g., `C:\Program Files\stock-monitor\`)
+3. (Optional) Add the directory to system PATH environment variable
+4. Open PowerShell or CMD and run:
+
+```powershell
+# Navigate to extracted directory
+cd "C:\Program Files\stock-monitor"
+
+# Run the program
+.\stock-monitor.exe
+
+# Check version
+.\stock-monitor.exe --version
+```
+
+---
+
+### Build from Source (Developers)
+
+If you want to contribute or use the latest code:
+
+```bash
+# Requires Go 1.25+
 go version
-```
 
-**Fedora/RedHat/CentOS:**
-```bash
-sudo dnf install go
-
-# Or using official download
-wget https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-
-go version
-```
-
-### 2. Clone Project and Install Dependencies
-
-```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/Junrin-Lee/stock-monitor.git
 cd stock-monitor
 
 # Download dependencies
 go mod download
-```
 
-### 3. Build and Run
-
-```bash
 # Build
-go build -o cmd/stock-monitor
+go build -o stock-monitor
 
 # Run
-./cmd/stock-monitor
+./stock-monitor
 ```
 
 Configuration and data directories will be automatically created on first run.
 
-### 4. Add Your First Stock
+### Add Your First Stock
 
 After entering the program:
 1. Select "Portfolio List"

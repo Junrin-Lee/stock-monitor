@@ -16,111 +16,146 @@
 
 ---
 
-## ⚡ 5 分钟快速开始
+## ⚡ 快速安装
 
-### 1. 安装 Go
+选择你的操作系统，一分钟内即可开始使用！
 
-首先需要安装 **Go 1.25.0 或更高版本**。
+### macOS
 
-#### macOS - 使用 Homebrew（推荐）
+**方式 1: Homebrew（推荐 ⭐）**
 
 ```bash
-# 安装 Homebrew（如果未安装）
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# 添加 tap 并安装
+brew tap Junrin-Lee/stock-monitor https://github.com/Junrin-Lee/stock-monitor.git
+brew install stock-monitor
 
-# 安装 Go
-brew install go
+# 运行
+stock-monitor
 
-# 验证安装
-go version  # 应该看到 go version go1.25.0 或更高
+# 升级到最新版本
+brew upgrade stock-monitor
+```
+
+**方式 2: DMG 安装包**
+
+1. 从 [Releases](https://github.com/Junrin-Lee/stock-monitor/releases) 下载 `stock-monitor_vX.X.X_macOS_universal.dmg`
+2. 双击打开 DMG 文件
+3. 将 `stock-monitor` 拖拽到 `/Applications` 或其他目录
+4. 首次运行：右键 → 打开（绕过 Gatekeeper 警告）
+
+**方式 3: 手动安装**
+
+```bash
+# 下载最新版本（替换 vX.X.X 为实际版本号）
+curl -LO https://github.com/Junrin-Lee/stock-monitor/releases/latest/download/stock-monitor_vX.X.X_macOS_universal.tar.gz
+tar -xzf stock-monitor_vX.X.X_macOS_universal.tar.gz
+
+# 移动到 PATH
+sudo mv stock-monitor /usr/local/bin/
+
+# 运行
+stock-monitor
 ```
 
 **macOS 额外配置 - 安装 terminal-notifier（用于告警通知）**
 
-Stock Monitor 的告警系统在 macOS 上需要 `terminal-notifier` 工具来发送系统通知。
-
 ```bash
-# 使用 Homebrew 安装（推荐）
 brew install terminal-notifier
-
-# 验证安装
-which terminal-notifier  # 应该显示安装路径
-
-# 测试通知功能
-terminal-notifier -message "测试通知" -title "Stock Monitor"
 ```
 
-> **为什么需要 terminal-notifier？**
-> - Stock Monitor 告警系统通过它发送 macOS 系统通知
-> - 如果未安装，告警仍会在应用内显示，但不会弹出系统通知
-> - 安装后会在右上角显示通知气泡和声音提醒
->
-> **详细信息**: [Homebrew - terminal-notifier](https://formulae.brew.sh/formula/terminal-notifier#default)
+> 💡 告警系统需要 `terminal-notifier` 来发送系统通知。如果未安装，告警仍会在应用内显示，但不会弹出系统通知。
 
-#### Windows - 下载安装程序
+---
 
-1. 访问 [golang.org/dl](https://golang.org/dl)
-2. 下载 **Windows x64** 版本的安装程序
-3. 双击运行 `.msi` 文件，按照提示安装
-4. 重启计算机生效
-5. 打开 PowerShell 验证：
-   ```powershell
-   go version
-   ```
+### Linux
 
-#### Linux - 使用包管理器或官方下载
+**Debian / Ubuntu（推荐 ⭐）**
 
-**Ubuntu/Debian:**
 ```bash
-# 方式1：使用包管理器（推荐简单）
-sudo apt-get update
-sudo apt-get install golang-go
+# 下载 .deb 包（替换 vX.X.X 为实际版本号）
+wget https://github.com/Junrin-Lee/stock-monitor/releases/latest/download/stock-monitor_vX.X.X_linux_amd64.deb
 
-# 方式2：从官方下载（推荐最新版）
-wget https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
-export PATH=$PATH:/usr/local/go/bin
+# 安装
+sudo dpkg -i stock-monitor_vX.X.X_linux_amd64.deb
 
-# 验证安装
+# 运行
+stock-monitor
+```
+
+**RHEL / Fedora / CentOS**
+
+```bash
+# 下载 .rpm 包
+wget https://github.com/Junrin-Lee/stock-monitor/releases/latest/download/stock-monitor_vX.X.X_linux_amd64.rpm
+
+# 安装
+sudo rpm -i stock-monitor_vX.X.X_linux_amd64.rpm
+
+# 运行
+stock-monitor
+```
+
+**其他发行版（tar.gz）**
+
+```bash
+# 下载并解压
+wget https://github.com/Junrin-Lee/stock-monitor/releases/latest/download/stock-monitor_vX.X.X_Linux_x86_64.tar.gz
+tar -xzf stock-monitor_vX.X.X_Linux_x86_64.tar.gz
+
+# 移动到 PATH
+sudo mv stock-monitor /usr/local/bin/
+
+# 运行
+stock-monitor
+```
+
+---
+
+### Windows
+
+1. 从 [Releases](https://github.com/Junrin-Lee/stock-monitor/releases) 下载 `stock-monitor_vX.X.X_Windows_x86_64.zip`
+2. 解压到任意目录（如 `C:\Program Files\stock-monitor\`）
+3. （可选）将目录添加到系统 PATH 环境变量
+4. 打开 PowerShell 或 CMD，运行：
+
+```powershell
+# 导航到解压目录
+cd "C:\Program Files\stock-monitor"
+
+# 运行程序
+.\stock-monitor.exe
+
+# 查看版本
+.\stock-monitor.exe --version
+```
+
+---
+
+### 从源代码编译（开发者）
+
+如果你想参与开发或使用最新代码：
+
+```bash
+# 需要 Go 1.25+
 go version
-```
 
-**Fedora/RedHat/CentOS:**
-```bash
-sudo dnf install go
-
-# 或使用官方下载
-wget https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-
-go version
-```
-
-### 2. 克隆项目并安装依赖
-
-```bash
 # 克隆项目
-git clone <repository-url>
+git clone https://github.com/Junrin-Lee/stock-monitor.git
 cd stock-monitor
 
 # 下载依赖
 go mod download
-```
 
-### 3. 编译运行
-
-```bash
 # 编译
-go build -o cmd/stock-monitor
+go build -o stock-monitor
 
 # 运行
-./cmd/stock-monitor
+./stock-monitor
 ```
 
 首次运行会自动创建配置文件和数据目录。
 
-### 4. 添加第一只股票
+### 添加第一只股票
 
 进入程序后：
 1. 选择"持股列表"
