@@ -1,12 +1,21 @@
 package i18n
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	"stock-monitor/internal/consts"
 )
+
+// embeddedI18n 嵌入的 i18n 文件系统（由主包设置）
+var embeddedI18n embed.FS
+
+// SetEmbeddedFS 设置嵌入的文件系统
+func SetEmbeddedFS(fs embed.FS) {
+	embeddedI18n = fs
+}
 
 // TextMap 文本映射结构
 type TextMap map[string]string
@@ -17,37 +26,48 @@ var texts map[consts.Language]TextMap
 // currentLanguage 当前语言
 var currentLanguage consts.Language = consts.Chinese
 
+// loadLanguageFile 加载单个语言文件（优先外部文件，失败时使用嵌入文件）
+func loadLanguageFile(filename string, lang consts.Language) bool {
+	var data []byte
+	var err error
+
+	// 1. 尝试从外部文件读取（开发环境）
+	externalPath := "i18n/" + filename
+	data, err = os.ReadFile(externalPath)
+	if err != nil {
+		// 2. 外部文件不存在，尝试从嵌入文件读取（生产环境）
+		embeddedPath := "i18n/" + filename
+		data, err = embeddedI18n.ReadFile(embeddedPath)
+		if err != nil {
+			fmt.Printf("Warning: Failed to read %s from both external and embedded sources: %v\n", filename, err)
+			return false
+		}
+	}
+
+	// 解析 JSON
+	var langTexts TextMap
+	if err := json.Unmarshal(data, &langTexts); err != nil {
+		fmt.Printf("Warning: Failed to parse %s: %v\n", filename, err)
+		return false
+	}
+
+	texts[lang] = langTexts
+	return true
+}
+
 // LoadI18nFiles 加载 i18n 文件
 func LoadI18nFiles() {
 	texts = make(map[consts.Language]TextMap)
 
-	// 读取中文配置
-	if zhData, err := os.ReadFile("i18n/zh.json"); err == nil {
-		var zhTexts TextMap
-		if err := json.Unmarshal(zhData, &zhTexts); err == nil {
-			texts[consts.Chinese] = zhTexts
-		} else {
-			fmt.Printf("Warning: Failed to parse i18n/zh.json: %v\n", err)
-		}
-	} else {
-		fmt.Printf("Warning: Failed to read i18n/zh.json: %v\n", err)
-	}
+	// 加载中文配置
+	loadLanguageFile("zh.json", consts.Chinese)
 
-	// 读取英文配置
-	if enData, err := os.ReadFile("i18n/en.json"); err == nil {
-		var enTexts TextMap
-		if err := json.Unmarshal(enData, &enTexts); err == nil {
-			texts[consts.English] = enTexts
-		} else {
-			fmt.Printf("Warning: Failed to parse i18n/en.json: %v\n", err)
-		}
-	} else {
-		fmt.Printf("Warning: Failed to read i18n/en.json: %v\n", err)
-	}
+	// 加载英文配置
+	loadLanguageFile("en.json", consts.English)
 
 	// 如果没有成功加载任何语言文件，退出程序
 	if len(texts) == 0 {
-		fmt.Println("Error: No i18n files could be loaded. Please ensure i18n/zh.json and i18n/en.json exist.")
+		fmt.Println("Error: No i18n files could be loaded. Please ensure i18n files are available.")
 		os.Exit(1)
 	}
 }

@@ -1,45 +1,60 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
 )
 
+//go:embed i18n/*.json
+var embeddedI18n embed.FS
+
 // texts i18n 配置 - 存储各语言的文本映射
 var texts map[Language]TextMap
+
+// loadLanguageFile 加载单个语言文件（优先外部文件，失败时使用嵌入文件）
+func loadLanguageFile(filename string, lang Language) bool {
+	var data []byte
+	var err error
+
+	// 1. 尝试从外部文件读取（开发环境）
+	externalPath := "i18n/" + filename
+	data, err = os.ReadFile(externalPath)
+	if err != nil {
+		// 2. 外部文件不存在，尝试从嵌入文件读取（生产环境）
+		embeddedPath := "i18n/" + filename
+		data, err = embeddedI18n.ReadFile(embeddedPath)
+		if err != nil {
+			fmt.Printf("Warning: Failed to read %s from both external and embedded sources: %v\n", filename, err)
+			return false
+		}
+	}
+
+	// 解析 JSON
+	var langTexts TextMap
+	if err := json.Unmarshal(data, &langTexts); err != nil {
+		fmt.Printf("Warning: Failed to parse %s: %v\n", filename, err)
+		return false
+	}
+
+	texts[lang] = langTexts
+	return true
+}
 
 // loadI18nFiles 加载 i18n 文件
 func loadI18nFiles() {
 	texts = make(map[Language]TextMap)
 
-	// 读取中文配置
-	if zhData, err := os.ReadFile("i18n/zh.json"); err == nil {
-		var zhTexts TextMap
-		if err := json.Unmarshal(zhData, &zhTexts); err == nil {
-			texts[Chinese] = zhTexts
-		} else {
-			fmt.Printf("Warning: Failed to parse i18n/zh.json: %v\n", err)
-		}
-	} else {
-		fmt.Printf("Warning: Failed to read i18n/zh.json: %v\n", err)
-	}
+	// 加载中文配置
+	loadLanguageFile("zh.json", Chinese)
 
-	// 读取英文配置
-	if enData, err := os.ReadFile("i18n/en.json"); err == nil {
-		var enTexts TextMap
-		if err := json.Unmarshal(enData, &enTexts); err == nil {
-			texts[English] = enTexts
-		} else {
-			fmt.Printf("Warning: Failed to parse i18n/en.json: %v\n", err)
-		}
-	} else {
-		fmt.Printf("Warning: Failed to read i18n/en.json: %v\n", err)
-	}
+	// 加载英文配置
+	loadLanguageFile("en.json", English)
 
 	// 如果没有成功加载任何语言文件，退出程序
 	if len(texts) == 0 {
-		fmt.Println("Error: No i18n files could be loaded. Please ensure i18n/zh.json and i18n/en.json exist.")
+		fmt.Println("Error: No i18n files could be loaded. Please ensure i18n files are available.")
 		os.Exit(1)
 	}
 }

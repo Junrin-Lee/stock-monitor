@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"stock-monitor/internal/app"
 	"stock-monitor/internal/consts"
+	"stock-monitor/internal/i18n"
 	"stock-monitor/internal/types"
 	"stock-monitor/internal/ui"
 	"stock-monitor/internal/ui/watchlist"
@@ -16,6 +18,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/jedib0t/go-pretty/v6/table"
 )
+
+//go:embed i18n/*.json
+var embeddedI18nFS embed.FS
 
 // Version information, injected at build time via ldflags
 var (
@@ -87,6 +92,9 @@ func main() {
 
 	// 启动节假日数据同步 worker（异步执行，不阻塞主流程）
 	StartHolidayWorker()
+
+	// 设置嵌入的 i18n 文件系统
+	i18n.SetEmbeddedFS(embeddedI18nFS)
 
 	// 加载 i18n 文件
 	loadI18nFiles()
