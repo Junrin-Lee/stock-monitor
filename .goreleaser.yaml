@@ -60,7 +60,7 @@ nfpms:
     package_name: stock-monitor
     vendor: Stock Monitor Project
     homepage: https://github.com/Junrin-Lee/stock-monitor
-    maintainer: Kaeya
+    maintainer: Junrin-Lee
     description: Professional TUI for real-time stock monitoring
     license: MIT
     formats:
@@ -98,8 +98,8 @@ release:
 brews:
   - name: stock-monitor
     repository:
-      owner: Kaeya
-      name: stock-monitor        # Uses this repository
+      owner: Junrin-Lee
+      name: stock-monitor
       branch: master
     directory: Formula
     homepage: https://github.com/Junrin-Lee/stock-monitor
