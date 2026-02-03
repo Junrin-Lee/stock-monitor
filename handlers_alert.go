@@ -1,6 +1,7 @@
 package main
 
 import (
+	"stock-monitor/internal/consts"
 	"fmt"
 	"time"
 
@@ -180,26 +181,26 @@ func parseStockCodes(input string) []string {
 // Note: getFrequencyOptions is defined in alert_frequency.go
 
 // ============================================================================
-// AlertManage State Handler
+// consts.AlertManage State Handler
 // ============================================================================
 
 // handleAlertManage handles alert management state
 func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "m": // Return to main menu
-		m.state = MainMenu
+		m.state = consts.MainMenu
 		m.message = ""
 		return m, nil
 
 	case "a": // Add alert
-		m.state = SelectBatchStocks
+		m.state = consts.SelectBatchStocks
 		m.batchSelectStep = 0
 		m.batchSelectedStocks = nil
 		m.stockSelectionMap = make(map[string]bool)
 		return m, nil
 
 	case "g": // Batch add
-		m.state = AlertBatchMethodSelect
+		m.state = consts.AlertBatchMethodSelect
 		m.batchSelectStep = 0
 		return m, nil
 
@@ -222,7 +223,7 @@ func (m *Model) handleAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.alertFrequencyDays = m.currentAlert.FrequencyDays
 		m.alertFrequencyCursor = getFrequencyCursorFromValue(m.currentAlert.Frequency)
 
-		m.state = AlertEdit
+		m.state = consts.AlertEdit
 		m.alertManageStep = 0
 		return m, nil
 
@@ -327,7 +328,7 @@ func (m *Model) viewAlertManage() string {
 }
 
 // ============================================================================
-// StockAlertManage State Handler
+// consts.StockAlertManage State Handler
 // ============================================================================
 
 // handleStockAlertManage handles stock alert details state
@@ -340,7 +341,7 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "a": // Add alert
-		m.state = AlertAdd
+		m.state = consts.AlertAdd
 		m.alertManageStep = 0
 		m.alertInput = ""
 		m.alertInputCursor = 0
@@ -373,7 +374,7 @@ func (m *Model) handleStockAlertManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.alertFrequencyDays = m.currentAlert.FrequencyDays
 		m.alertFrequencyCursor = getFrequencyCursorFromValue(m.currentAlert.Frequency)
 
-		m.state = AlertEdit
+		m.state = consts.AlertEdit
 		m.alertManageStep = 0
 		return m, nil
 
@@ -501,7 +502,7 @@ func (m *Model) viewStockAlertManage() string {
 }
 
 // ============================================================================
-// AlertAdd State Handler (Type/Condition/Threshold)
+// consts.AlertAdd State Handler (Type/Condition/Threshold)
 // ============================================================================
 
 // handleAlertAdd handles add alert state
@@ -526,10 +527,10 @@ func (m *Model) handleAlertAdd(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q": // Return
-		if m.previousState == StockAlertManage {
-			m.state = StockAlertManage
+		if m.previousState == consts.StockAlertManage {
+			m.state = consts.StockAlertManage
 		} else {
-			m.state = AlertManage
+			m.state = consts.AlertManage
 		}
 		m.message = ""
 		return m, nil
@@ -726,11 +727,11 @@ func (m *Model) createAlertWithFrequency() (tea.Model, tea.Cmd) {
 	m.message = fmt.Sprintf(m.getText("alert.createSuccess"), alert.StockName)
 
 	// Return to source state
-	if m.previousState == StockAlertManage {
+	if m.previousState == consts.StockAlertManage {
 		m.stockAlertAlerts = m.getStockAlerts(m.stockAlertCode)
-		m.state = StockAlertManage
+		m.state = consts.StockAlertManage
 	} else {
-		m.state = AlertManage
+		m.state = consts.AlertManage
 	}
 
 	// Reset state
@@ -763,7 +764,7 @@ func (m *Model) viewAlertAdd() string {
 }
 
 // ============================================================================
-// AlertEdit State Handler
+// consts.AlertEdit State Handler
 // ============================================================================
 
 // handleAlertEdit handles edit alert state
@@ -788,10 +789,10 @@ func (m *Model) handleAlertEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleAlertEditTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q": // Return
-		if m.previousState == StockAlertManage {
-			m.state = StockAlertManage
+		if m.previousState == consts.StockAlertManage {
+			m.state = consts.StockAlertManage
 		} else {
-			m.state = AlertManage
+			m.state = consts.AlertManage
 		}
 		m.message = ""
 		return m, nil
@@ -1004,11 +1005,11 @@ func (m *Model) saveEditedAlert() (tea.Model, tea.Cmd) {
 	m.message = m.getText("alert.editSuccess")
 
 	// Return to source state
-	if m.previousState == StockAlertManage {
+	if m.previousState == consts.StockAlertManage {
 		m.stockAlertAlerts = m.getStockAlerts(m.stockAlertCode)
-		m.state = StockAlertManage
+		m.state = consts.StockAlertManage
 	} else {
-		m.state = AlertManage
+		m.state = consts.AlertManage
 	}
 
 	// Reset state
@@ -1047,7 +1048,7 @@ func (m *Model) viewAlertEdit() string {
 func (m *Model) handleAlertBatchMethodSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "m": // Return to alert management
-		m.state = AlertManage
+		m.state = consts.AlertManage
 		m.message = ""
 		return m, nil
 
@@ -1066,17 +1067,17 @@ func (m *Model) handleAlertBatchMethodSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd
 	case "enter", " ":
 		switch m.batchSelectStep {
 		case 0: // Batch by tag
-			m.state = AlertBatchByTag
+			m.state = consts.AlertBatchByTag
 			m.batchAlertTag = ""
 			m.tagManageCursor = 0
 
 		case 1: // Batch by market
-			m.state = AlertBatchByMarket
+			m.state = consts.AlertBatchByMarket
 			m.batchSelectedMarket = ""
 			m.marketCursor = 0
 
 		case 2: // Batch by stock list
-			m.state = SelectBatchStocks
+			m.state = consts.SelectBatchStocks
 			m.batchSelectStep = 0
 		}
 		return m, nil
@@ -1099,7 +1100,7 @@ func (m *Model) viewAlertBatchMethodSelect() string {
 func (m *Model) handleAlertBatchByTag(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "m": // Return to method selection
-		m.state = AlertBatchMethodSelect
+		m.state = consts.AlertBatchMethodSelect
 		m.batchAlertTag = ""
 		return m, nil
 
@@ -1126,7 +1127,7 @@ func (m *Model) handleAlertBatchByTag(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			m.state = AlertBatchAdd
+			m.state = consts.AlertBatchAdd
 			m.alertManageStep = 0
 			m.tagSelectCursor = 0
 		}
@@ -1154,7 +1155,7 @@ func (m *Model) viewAlertBatchByTag() string {
 func (m *Model) handleAlertBatchByMarket(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "m": // Return to method selection
-		m.state = AlertBatchMethodSelect
+		m.state = consts.AlertBatchMethodSelect
 		m.batchSelectedMarket = ""
 		return m, nil
 
@@ -1188,7 +1189,7 @@ func (m *Model) handleAlertBatchByMarket(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		m.state = AlertBatchAdd
+		m.state = consts.AlertBatchAdd
 		m.alertManageStep = 0
 		m.tagSelectCursor = 0
 		return m, nil
@@ -1214,10 +1215,10 @@ func (m *Model) viewAlertBatchByMarket() string {
 func (m *Model) handleSelectBatchStocks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "m": // Return
-		if m.state == SelectBatchStocks && m.previousState != AlertManage {
-			m.state = AlertBatchMethodSelect
+		if m.state == consts.SelectBatchStocks && m.previousState != consts.AlertManage {
+			m.state = consts.AlertBatchMethodSelect
 		} else {
-			m.state = AlertManage
+			m.state = consts.AlertManage
 		}
 		m.message = ""
 		m.batchSelectedStocks = nil
@@ -1239,19 +1240,19 @@ func (m *Model) handleSelectBatchStocks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter", " ":
 		switch m.batchSelectStep {
 		case 0: // From watchlist
-			m.state = SelectBatchFromWatchlist
+			m.state = consts.SelectBatchFromWatchlist
 			m.batchStockSource = BatchSourceWatchlist
 			m.stockSelectionMap = make(map[string]bool)
 			m.watchlistCursor = 0
 
 		case 1: // From portfolio
-			m.state = SelectBatchFromPortfolio
+			m.state = consts.SelectBatchFromPortfolio
 			m.batchStockSource = BatchSourcePortfolio
 			m.stockSelectionMap = make(map[string]bool)
 			m.portfolioCursor = 0
 
 		case 2: // Manual input
-			m.state = InputBatchCodes
+			m.state = consts.InputBatchCodes
 			m.batchStockSource = BatchSourceManual
 			m.batchCodeInput = ""
 		}
@@ -1285,7 +1286,7 @@ func (m *Model) handleSelectBatchFromPortfolio(msg tea.KeyMsg) (tea.Model, tea.C
 func (m *Model) handleBatchStockSelection(msg tea.KeyMsg, isWatchlist bool) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "m": // Return to source selection
-		m.state = SelectBatchStocks
+		m.state = consts.SelectBatchStocks
 		m.stockSelectionMap = make(map[string]bool)
 		return m, nil
 
@@ -1302,7 +1303,7 @@ func (m *Model) handleBatchStockSelection(msg tea.KeyMsg, isWatchlist bool) (tea
 			return m, nil
 		}
 
-		m.state = AlertBatchAdd
+		m.state = consts.AlertBatchAdd
 		m.alertManageStep = 0
 		m.tagSelectCursor = 0
 		return m, nil
@@ -1403,7 +1404,7 @@ func (m *Model) viewSelectBatchFromPortfolio() string {
 func (m *Model) handleInputBatchCodes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "m": // Return to source selection
-		m.state = SelectBatchStocks
+		m.state = consts.SelectBatchStocks
 		m.batchCodeInput = ""
 		return m, nil
 
@@ -1415,7 +1416,7 @@ func (m *Model) handleInputBatchCodes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		m.batchSelectedStocks = codes
-		m.state = AlertBatchAdd
+		m.state = consts.AlertBatchAdd
 		m.alertManageStep = 0
 		m.tagSelectCursor = 0
 		return m, nil
@@ -1465,7 +1466,7 @@ func (m *Model) handleAlertBatchAdd(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleBatchAlertTypeSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q": // Return
-		m.state = AlertBatchMethodSelect
+		m.state = consts.AlertBatchMethodSelect
 		m.message = ""
 		return m, nil
 
@@ -1690,7 +1691,7 @@ func (m *Model) createBatchAlertsWithFrequency() (tea.Model, tea.Cmd) {
 	m.saveAlertData()
 	m.message = fmt.Sprintf(m.getText("alert.batch.success"), addedCount)
 
-	m.state = AlertManage
+	m.state = consts.AlertManage
 	m.alertManageStep = 0
 	m.tagSelectCursor = 0
 	m.alertInput = ""

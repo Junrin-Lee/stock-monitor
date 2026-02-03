@@ -105,7 +105,7 @@ func main() {
 	watchlist := loadWatchlist()
 
 	// 根据配置和是否有股票数据决定初始状态
-	initialState := MainMenu
+	initialState := consts.MainMenu
 	var lastUpdate time.Time
 	if config.System.AutoStart {
 		// 根据startup_module配置决定启动哪个模块
@@ -113,28 +113,28 @@ func main() {
 		case "portfolio":
 			// 启动持股模块，需要有持股数据
 			if len(portfolio.Stocks) > 0 {
-				initialState = Monitoring
+				initialState = consts.Monitoring
 				lastUpdate = time.Now()
 			}
 		case "watchlist":
 			// 启动自选模块，需要有自选数据
 			if len(watchlist.Stocks) > 0 {
-				initialState = WatchlistViewing
+				initialState = consts.WatchlistViewing
 				lastUpdate = time.Now()
 			}
 		default:
 			// 默认行为：如果有持股数据则进入持股模块
 			if len(portfolio.Stocks) > 0 {
-				initialState = Monitoring
+				initialState = consts.Monitoring
 				lastUpdate = time.Now()
 			}
 		}
 	}
 
 	// 根据配置文件设置语言
-	language := English // 默认英文
+	language := consts.English // 默认英文
 	if config.System.Language == "zh" {
-		language = Chinese
+		language = consts.Chinese
 	}
 
 	m := Model{
@@ -176,7 +176,7 @@ func main() {
 }
 
 func (m *Model) Init() tea.Cmd {
-	if m.state == Monitoring || m.state == WatchlistViewing {
+	if m.state == consts.Monitoring || m.state == consts.WatchlistViewing {
 		return m.tickCmd()
 	}
 	return nil
@@ -189,18 +189,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// 持股列表和自选列表滚动快捷键
-		if m.state == Monitoring || m.state == WatchlistViewing {
+		if m.state == consts.Monitoring || m.state == consts.WatchlistViewing {
 			keyStr := msg.String()
 			switch keyStr {
 			case "up":
-				if m.state == Monitoring {
+				if m.state == consts.Monitoring {
 					m.scrollPortfolioUp()
 				} else {
 					m.scrollWatchlistUp()
 				}
 				return m, nil
 			case "down":
-				if m.state == Monitoring {
+				if m.state == consts.Monitoring {
 					m.scrollPortfolioDown()
 				} else {
 					m.scrollWatchlistDown()
@@ -211,77 +211,77 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// 处理各状态的正常按键
 		switch m.state {
-		case MainMenu:
+		case consts.MainMenu:
 			newModel, cmd = m.handleMainMenu(msg)
-		case AddingStock:
+		case consts.AddingStock:
 			newModel, cmd = m.handleAddingStock(msg)
-		case Monitoring:
+		case consts.Monitoring:
 			newModel, cmd = m.handleMonitoring(msg)
-		case EditingStock:
+		case consts.EditingStock:
 			newModel, cmd = m.handleEditingStock(msg)
-		case SearchingStock:
+		case consts.SearchingStock:
 			newModel, cmd = m.handleSearchingStock(msg)
-		case SearchResult:
+		case consts.SearchResult:
 			newModel, cmd = m.handleSearchResult(msg)
-		case SearchResultWithActions:
+		case consts.SearchResultWithActions:
 			newModel, cmd = m.handleSearchResultWithActions(msg)
-		case WatchlistSearchConfirm:
+		case consts.WatchlistSearchConfirm:
 			newModel, cmd = m.handleWatchlistSearchConfirm(msg)
-		case LanguageSelection:
+		case consts.LanguageSelection:
 			newModel, cmd = m.handleLanguageSelection(msg)
-		case WatchlistViewing:
+		case consts.WatchlistViewing:
 			newModel, cmd = m.handleWatchlistViewing(msg)
-		case WatchlistTagging:
+		case consts.WatchlistTagging:
 			newModel, cmd = m.handleWatchlistTagging(msg)
-		case WatchlistTagSelect:
+		case consts.WatchlistTagSelect:
 			newModel, cmd = m.handleWatchlistTagSelect(msg)
-		case WatchlistTagManage:
+		case consts.WatchlistTagManage:
 			newModel, cmd = m.handleWatchlistTagManage(msg)
-		case WatchlistTagRemoveSelect:
+		case consts.WatchlistTagRemoveSelect:
 			newModel, cmd = m.handleWatchlistTagRemoveSelect(msg)
-		case WatchlistTagEdit:
+		case consts.WatchlistTagEdit:
 			newModel, cmd = m.handleWatchlistTagEdit(msg)
-		case WatchlistGroupSelect:
+		case consts.WatchlistGroupSelect:
 			newModel, cmd = m.handleWatchlistGroupSelect(msg)
-		case PortfolioSorting:
+		case consts.PortfolioSorting:
 			newModel, cmd = m.handlePortfolioSorting(msg)
-		case WatchlistSorting:
+		case consts.WatchlistSorting:
 			newModel, cmd = m.handleWatchlistSorting(msg)
-		case IntradayChartViewing:
+		case consts.IntradayChartViewing:
 			newModel, cmd = m.handleIntradayChartViewing(msg)
-		case AlertManage:
+		case consts.AlertManage:
 			newModel, cmd = m.handleAlertManage(msg)
-		case StockAlertManage:
+		case consts.StockAlertManage:
 			newModel, cmd = m.handleStockAlertManage(msg)
-		case AlertAdd:
+		case consts.AlertAdd:
 			newModel, cmd = m.handleAlertAdd(msg)
-		case AlertEdit:
+		case consts.AlertEdit:
 			newModel, cmd = m.handleAlertEdit(msg)
-		case AlertBatchMethodSelect:
+		case consts.AlertBatchMethodSelect:
 			newModel, cmd = m.handleAlertBatchMethodSelect(msg)
-		case AlertBatchByTag:
+		case consts.AlertBatchByTag:
 			newModel, cmd = m.handleAlertBatchByTag(msg)
-		case AlertBatchByMarket:
+		case consts.AlertBatchByMarket:
 			newModel, cmd = m.handleAlertBatchByMarket(msg)
-		case SelectBatchStocks:
+		case consts.SelectBatchStocks:
 			newModel, cmd = m.handleSelectBatchStocks(msg)
-		case SelectBatchFromWatchlist:
+		case consts.SelectBatchFromWatchlist:
 			newModel, cmd = m.handleSelectBatchFromWatchlist(msg)
-		case SelectBatchFromPortfolio:
+		case consts.SelectBatchFromPortfolio:
 			newModel, cmd = m.handleSelectBatchFromPortfolio(msg)
-		case InputBatchCodes:
+		case consts.InputBatchCodes:
 			newModel, cmd = m.handleInputBatchCodes(msg)
-		case AlertBatchAdd:
+		case consts.AlertBatchAdd:
 			newModel, cmd = m.handleAlertBatchAdd(msg)
-		case AlertTypeSelect:
+		case consts.AlertTypeSelect:
 			newModel, cmd = m.handleAlertTypeSelect(msg)
-		case AlertThresholdInput:
+		case consts.AlertThresholdInput:
 			newModel, cmd = m.handleAlertThresholdInput(msg)
-		case AlertConditionSelect:
+		case consts.AlertConditionSelect:
 			newModel, cmd = m.handleAlertConditionSelect(msg)
-		case AlertFrequencySelect:
+		case consts.AlertFrequencySelect:
 			newModel, cmd = m.handleAlertFrequencySelectStep(msg)
-		case AlertFrequencyDaysInput:
+		case consts.AlertFrequencyDaysInput:
 			newModel, cmd = m.handleAlertFrequencyDaysInput(msg)
 		case consts.SectorViewing:
 			newModel, cmd = m.handleSectorViewing(msg)
@@ -293,7 +293,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newModel, cmd = m, nil
 		}
 	case tickMsg:
-		if m.state == Monitoring || m.state == WatchlistViewing {
+		if m.state == consts.Monitoring || m.state == consts.WatchlistViewing {
 			m.lastUpdate = time.Now()
 
 			// 启动异步数据更新
@@ -355,12 +355,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logDebug("log.cache.updated", msg.Symbol)
 
 			// 如果当前在自选列表且已启用排序，重新应用排序以保持顺序正确
-			if m.state == WatchlistViewing && m.watchlistIsSorted {
+			if m.state == consts.WatchlistViewing && m.watchlistIsSorted {
 				m.optimizedSortWatchlist(m.watchlistSortField, m.watchlistSortDirection)
 			}
 
 			// 如果当前在持股列表且已启用排序，先更新价格数据再重新排序
-			if m.state == Monitoring && m.portfolioIsSorted {
+			if m.state == consts.Monitoring && m.portfolioIsSorted {
 				m.updatePortfolioPricesFromCache()
 				m.optimizedSortPortfolio(m.portfolioSortField, m.portfolioSortDirection)
 			}
@@ -376,7 +376,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m, nil
 	case checkDataAvailabilityMsg:
 		// 处理数据可用性检查during auto-collection
-		if m.state == IntradayChartViewing && m.chartIsCollecting {
+		if m.state == consts.IntradayChartViewing && m.chartIsCollecting {
 			data, err := m.loadIntradayDataForDate(msg.code, m.chartViewStockName, msg.date)
 			if err == nil {
 				// 数据现在可用!
@@ -451,81 +451,81 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) View() string {
 	var mainContent string
 	switch m.state {
-	case MainMenu:
+	case consts.MainMenu:
 		mainContent = m.viewMainMenu()
-	case AddingStock:
+	case consts.AddingStock:
 		mainContent = m.viewAddingStock()
-	case Monitoring:
+	case consts.Monitoring:
 		mainContent = m.viewMonitoring()
-	case EditingStock:
+	case consts.EditingStock:
 		mainContent = m.viewEditingStock()
-	case SearchingStock:
+	case consts.SearchingStock:
 		mainContent = m.viewSearchingStock()
-	case SearchResult:
+	case consts.SearchResult:
 		mainContent = m.viewSearchResult()
-	case SearchResultWithActions:
+	case consts.SearchResultWithActions:
 		mainContent = m.viewSearchResultWithActions()
-	case WatchlistSearchConfirm:
+	case consts.WatchlistSearchConfirm:
 		mainContent = m.viewWatchlistSearchConfirm()
-	case LanguageSelection:
+	case consts.LanguageSelection:
 		mainContent = m.viewLanguageSelection()
-	case WatchlistViewing:
+	case consts.WatchlistViewing:
 		mainContent = m.viewWatchlistViewing()
-	case WatchlistTagging:
+	case consts.WatchlistTagging:
 		mainContent = m.viewWatchlistTagging()
-	case WatchlistTagSelect:
+	case consts.WatchlistTagSelect:
 		mainContent = m.viewWatchlistTagSelect()
-	case WatchlistTagManage:
+	case consts.WatchlistTagManage:
 		mainContent = m.viewWatchlistTagManage()
-	case WatchlistTagRemoveSelect:
+	case consts.WatchlistTagRemoveSelect:
 		mainContent = m.viewWatchlistTagRemoveSelect()
-	case WatchlistTagEdit:
+	case consts.WatchlistTagEdit:
 		mainContent = m.viewWatchlistTagEdit()
-	case WatchlistGroupSelect:
+	case consts.WatchlistGroupSelect:
 		mainContent = m.viewWatchlistGroupSelect()
-	case PortfolioSorting:
+	case consts.PortfolioSorting:
 		mainContent = m.viewPortfolioSorting()
-	case WatchlistSorting:
+	case consts.WatchlistSorting:
 		mainContent = m.viewWatchlistSorting()
-	case IntradayChartViewing:
+	case consts.IntradayChartViewing:
 		// 获取终端尺寸 - 使用合理的默认值
 		termWidth := 120
 		termHeight := 30
 		mainContent = m.viewIntradayChart(termWidth, termHeight)
-	case AlertManage:
+	case consts.AlertManage:
 		mainContent = m.viewAlertManage()
-	case StockAlertManage:
+	case consts.StockAlertManage:
 		mainContent = m.viewStockAlertManage()
-	case AlertAdd:
+	case consts.AlertAdd:
 		mainContent = m.viewAlertAdd()
-	case AlertEdit:
+	case consts.AlertEdit:
 		mainContent = m.viewAlertEdit()
-	case AlertBatchMethodSelect:
+	case consts.AlertBatchMethodSelect:
 		mainContent = m.viewAlertBatchMethodSelect()
-	case AlertBatchByTag:
+	case consts.AlertBatchByTag:
 		mainContent = m.viewAlertBatchByTag()
-	case AlertBatchByMarket:
+	case consts.AlertBatchByMarket:
 		mainContent = m.viewAlertBatchByMarket()
-	case SelectBatchStocks:
+	case consts.SelectBatchStocks:
 		mainContent = m.viewSelectBatchStocks()
-	case SelectBatchFromWatchlist:
+	case consts.SelectBatchFromWatchlist:
 		mainContent = m.viewSelectBatchFromWatchlist()
-	case SelectBatchFromPortfolio:
+	case consts.SelectBatchFromPortfolio:
 		mainContent = m.viewSelectBatchFromPortfolio()
-	case InputBatchCodes:
+	case consts.InputBatchCodes:
 		mainContent = m.viewInputBatchCodes()
-	case AlertBatchAdd:
+	case consts.AlertBatchAdd:
 		mainContent = m.viewAlertBatchAdd()
 	case consts.AlertTypeSelect:
-		mainContent = m.viewAlertAdd() // AlertTypeSelect复用viewAlertAdd
+		mainContent = m.viewAlertAdd() // consts.AlertTypeSelect复用viewAlertAdd
 	case consts.AlertThresholdInput:
-		mainContent = m.viewAlertAdd() // AlertThresholdInput复用viewAlertAdd
+		mainContent = m.viewAlertAdd() // consts.AlertThresholdInput复用viewAlertAdd
 	case consts.AlertConditionSelect:
-		mainContent = m.viewAlertAdd() // AlertConditionSelect复用viewAlertAdd
+		mainContent = m.viewAlertAdd() // consts.AlertConditionSelect复用viewAlertAdd
 	case consts.AlertFrequencySelect:
-		mainContent = m.viewAlertAdd() // AlertFrequencySelect复用viewAlertAdd
+		mainContent = m.viewAlertAdd() // consts.AlertFrequencySelect复用viewAlertAdd
 	case consts.AlertFrequencyDaysInput:
-		mainContent = m.viewAlertAdd() // AlertFrequencyDaysInput复用viewAlertAdd
+		mainContent = m.viewAlertAdd() // consts.AlertFrequencyDaysInput复用viewAlertAdd
 	case consts.SectorViewing:
 		mainContent = m.viewSectorViewing()
 	case consts.SectorStockList:

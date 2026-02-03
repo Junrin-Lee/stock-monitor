@@ -1,6 +1,7 @@
 package main
 
 import (
+	"stock-monitor/internal/consts"
 	"fmt"
 	"strconv"
 	"stock-monitor/internal/api"
@@ -13,7 +14,7 @@ import (
 )
 
 // ============================================================================
-// Portfolio Monitoring Handlers
+// Portfolio consts.Monitoring Handlers
 // ============================================================================
 
 // handleMonitoringNavigation handles navigation in portfolio monitoring view
@@ -34,7 +35,7 @@ func (m *Model) handleMonitoringActions(msg tea.KeyMsg) (tea.Model, tea.Cmd, boo
 	switch msg.String() {
 	case "esc", "q", "m":
 		m.stopIntradayDataCollection() // Stop intraday data collection
-		m.state = MainMenu
+		m.state = consts.MainMenu
 		m.message = "" // Clear message
 		return m, nil, true
 	case "e":
@@ -45,7 +46,7 @@ func (m *Model) handleMonitoringActions(msg tea.KeyMsg) (tea.Model, tea.Cmd, boo
 		}
 		logInfo("log.action.enterEdit")
 		m.previousState = m.state // Record current state
-		m.state = EditingStock
+		m.state = consts.EditingStock
 		m.editingStep = 1 // Start editing cost price
 		m.selectedStockIndex = m.portfolioCursor
 		m.tempCode = m.portfolio.Stocks[m.portfolioCursor].Code
@@ -76,7 +77,7 @@ func (m *Model) handleMonitoringActions(msg tea.KeyMsg) (tea.Model, tea.Cmd, boo
 		// Jump to add stock page
 		logInfo("log.action.enterAdd")
 		m.previousState = m.state // Record current state
-		m.state = AddingStock
+		m.state = consts.AddingStock
 		m.addingStep = 0
 		m.tempCode = ""
 		m.tempCost = ""
@@ -110,7 +111,7 @@ func (m *Model) handleMonitoringViews(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool)
 			actualDate = getSmartChartDate()
 		}
 		m.chartViewDate = actualDate
-		m.previousState = Monitoring
+		m.previousState = consts.Monitoring
 
 		logDebug("log.chart.keyV", selectedStock.Code, selectedStock.Name, m.chartViewDate)
 
@@ -126,7 +127,7 @@ func (m *Model) handleMonitoringViews(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool)
 			logDebug("log.chart.noData", loadErr)
 			m.chartData = nil
 			m.chartLoadError = nil
-			m.state = IntradayChartViewing
+			m.state = consts.IntradayChartViewing
 			return m, m.triggerIntradayDataCollection(
 				selectedStock.Code,
 				selectedStock.Name,
@@ -139,12 +140,12 @@ func (m *Model) handleMonitoringViews(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool)
 		m.chartData = data
 		m.chartLoadError = nil
 		m.chartIsCollecting = false
-		m.state = IntradayChartViewing
+		m.state = consts.IntradayChartViewing
 		return m, nil, true
 	case "s":
 		// Enter sort menu
 		logInfo("log.action.enterSort")
-		m.state = PortfolioSorting
+		m.state = consts.PortfolioSorting
 		// Smart position cursor to current sort field
 		m.portfolioSortCursor = m.findSortFieldIndex(m.portfolioSortField, true)
 		m.message = ""
@@ -161,13 +162,13 @@ func (m *Model) handleMonitoringViews(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool)
 		m.stockAlertCode = currentStock.Code
 		m.stockAlertName = currentStock.Name
 		m.stockAlertCursor = 0
-		m.previousState = Monitoring // Record return state
+		m.previousState = consts.Monitoring // Record return state
 
 		// Get all alerts for this stock
 		m.stockAlertAlerts = m.getStockAlerts(currentStock.Code)
 
 		logInfo("log.action.enterStockAlertManagement", currentStock.Code, currentStock.Name)
-		m.state = StockAlertManage
+		m.state = consts.StockAlertManage
 		m.message = ""
 		return m, nil, true
 	}
@@ -219,7 +220,7 @@ func (m *Model) viewMonitoring() string {
 	maxPortfolioLines := m.config.Display.MaxLines
 	if totalStocks > 0 {
 		currentPos := m.portfolioCursor + 1 // Display position starting from 1
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += fmt.Sprintf("📊 持股列表 (%d/%d) [↑/↓:翻页]\n", currentPos, totalStocks)
 		} else {
 			s += fmt.Sprintf("📊 Portfolio (%d/%d) [↑/↓:scroll]\n", currentPos, totalStocks)
@@ -293,14 +294,14 @@ func (m *Model) viewMonitoring() string {
 	if totalStocks > maxPortfolioLines {
 		s += strings.Repeat("-", 80) + "\n"
 		if m.portfolioScrollPos > 0 {
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				s += "↑ 有更新的股票 (按↓查看)\n"
 			} else {
 				s += "↑ Newer stocks available (press ↓)\n"
 			}
 		}
 		if m.portfolioScrollPos < totalStocks-1 {
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				s += "↓ 有更多历史股票 (按↑查看)\n"
 			} else {
 				s += "↓ More stocks available (press ↑)\n"
@@ -323,16 +324,16 @@ func (m *Model) handleAddingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Determine return target based on source
 		if m.fromSearch {
 			// From portfolio or search result, return to respective page
-			if m.previousState == Monitoring {
-				m.state = Monitoring
+			if m.previousState == consts.Monitoring {
+				m.state = consts.Monitoring
 				m.resetPortfolioCursor() // Reset cursor to first stock
 				m.lastUpdate = time.Now()
 			} else {
-				m.state = SearchResultWithActions
+				m.state = consts.SearchResultWithActions
 			}
 			m.fromSearch = false // Reset flag
 		} else {
-			m.state = MainMenu
+			m.state = consts.MainMenu
 		}
 		m.message = ""
 		m.inputCursor = 0
@@ -359,7 +360,7 @@ func (m *Model) handleAddingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input, m.inputCursor = ui.DeleteRuneAtCursor(m.input, m.inputCursor)
 		return m, nil
 	default:
-		// Improved input handling: support multi-byte characters (e.g., Chinese)
+		// Improved input handling: support multi-byte characters (e.g., consts.Chinese)
 		str := msg.String()
 		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
 			m.input, m.inputCursor = ui.InsertStringAtCursor(m.input, m.inputCursor, str)
@@ -382,7 +383,7 @@ func (m *Model) processAddingStep() (tea.Model, tea.Cmd) {
 		if api.ContainsChineseChars(m.input) {
 			stockData = convertStockData(api.SearchChineseStock(m.input))
 		} else {
-			// For non-Chinese input, try direct price fetch first, then search
+			// For non-consts.Chinese input, try direct price fetch first, then search
 			stockData = convertStockData(api.GetStockPrice(m.input))
 
 			// If direct fetch fails, try as search keyword
@@ -457,7 +458,7 @@ func (m *Model) processAddingStep() (tea.Model, tea.Cmd) {
 		// Determine jump target based on source
 		if m.fromSearch {
 			// From search result, jump to portfolio (monitoring) page
-			m.state = Monitoring
+			m.state = consts.Monitoring
 			m.resetPortfolioCursor() // Reset cursor to first stock
 			m.lastUpdate = time.Now()
 			m.fromSearch = false // Reset flag
@@ -467,7 +468,7 @@ func (m *Model) processAddingStep() (tea.Model, tea.Cmd) {
 			return m, m.tickCmd() // Start timer when jumping to monitoring
 		} else {
 			// From main menu, return to main menu
-			m.state = MainMenu
+			m.state = consts.MainMenu
 			m.message = fmt.Sprintf(m.getText("addSuccess"), m.stockInfo.Name, m.tempCode)
 			m.addingStep = 0
 			m.input = ""
@@ -498,7 +499,7 @@ func (m *Model) viewAddingStock() string {
 	}
 
 	// Add cursor operation hints
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		s += "\n操作: ←/→移动光标, Enter确认, ESC返回, Home/End跳转首尾\n"
 	} else {
 		s += "\nActions: ←/→ move cursor, Enter confirm, ESC back, Home/End jump\n"
@@ -519,15 +520,15 @@ func (m *Model) handleEditingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		// Determine where to return based on previous state
-		if m.previousState == Monitoring {
-			m.state = Monitoring
+		if m.previousState == consts.Monitoring {
+			m.state = consts.Monitoring
 			m.resetPortfolioCursor() // Reset cursor to first stock
 			m.lastUpdate = time.Now()
 			m.message = ""
 			m.inputCursor = 0
 			return m, m.tickCmd()
 		} else {
-			m.state = MainMenu
+			m.state = consts.MainMenu
 			m.message = ""
 			m.inputCursor = 0
 			return m, nil
@@ -554,7 +555,7 @@ func (m *Model) handleEditingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input, m.inputCursor = ui.DeleteRuneAtCursor(m.input, m.inputCursor)
 		return m, nil
 	default:
-		// Improved input handling: support multi-byte characters (e.g., Chinese)
+		// Improved input handling: support multi-byte characters (e.g., consts.Chinese)
 		str := msg.String()
 		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
 			m.input, m.inputCursor = ui.InsertStringAtCursor(m.input, m.inputCursor, str)
@@ -603,8 +604,8 @@ func (m *Model) processEditingStep() (tea.Model, tea.Cmd) {
 
 			stockName := m.portfolio.Stocks[m.selectedStockIndex].Name
 			// Determine where to return based on previous state
-			if m.previousState == Monitoring {
-				m.state = Monitoring
+			if m.previousState == consts.Monitoring {
+				m.state = consts.Monitoring
 				m.resetPortfolioCursor() // Reset cursor to first stock
 				m.lastUpdate = time.Now()
 				m.message = fmt.Sprintf(m.getText("editSuccess"), stockName)
@@ -613,7 +614,7 @@ func (m *Model) processEditingStep() (tea.Model, tea.Cmd) {
 				m.inputCursor = 0
 				return m, m.tickCmd()
 			} else {
-				m.state = MainMenu
+				m.state = consts.MainMenu
 				m.message = fmt.Sprintf(m.getText("editSuccess"), stockName)
 				m.editingStep = 0
 				m.input = ""
@@ -630,7 +631,7 @@ func (m *Model) viewEditingStock() string {
 	switch m.editingStep {
 	case 1:
 		stock := m.portfolio.Stocks[m.selectedStockIndex]
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += fmt.Sprintf("股票: %s (%s)\n", stock.Name, stock.Code)
 		} else {
 			s += fmt.Sprintf("Stock: %s (%s)\n", stock.Name, stock.Code)
@@ -639,7 +640,7 @@ func (m *Model) viewEditingStock() string {
 		s += m.getText("enterNewCost") + ui.FormatTextWithCursor(m.input, m.inputCursor) + "\n"
 	case 2:
 		stock := m.portfolio.Stocks[m.selectedStockIndex]
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += fmt.Sprintf("股票: %s (%s)\n", stock.Name, stock.Code)
 		} else {
 			s += fmt.Sprintf("Stock: %s (%s)\n", stock.Name, stock.Code)
@@ -650,7 +651,7 @@ func (m *Model) viewEditingStock() string {
 	}
 
 	// Add cursor operation hints
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		s += "\n操作: ←/→移动光标, Enter确认, ESC/Q返回, Home/End跳转首尾\n"
 	} else {
 		s += "\nActions: ←/→ move cursor, Enter confirm, ESC/Q back, Home/End jump\n"
@@ -680,40 +681,40 @@ func (m *Model) handlePortfolioSorting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		selectedField := sortFields[m.portfolioSortCursor]
 		if m.portfolioSortField == selectedField {
 			// Toggle sort direction
-			if m.portfolioSortDirection == SortAsc {
-				m.portfolioSortDirection = SortDesc
+			if m.portfolioSortDirection == consts.SortAsc {
+				m.portfolioSortDirection = consts.SortDesc
 			} else {
-				m.portfolioSortDirection = SortAsc
+				m.portfolioSortDirection = consts.SortAsc
 			}
 		} else {
 			// Set new sort field, default ascending
 			m.portfolioSortField = selectedField
-			m.portfolioSortDirection = SortAsc
+			m.portfolioSortDirection = consts.SortAsc
 		}
 		// Execute sort and mark as sorted
 		m.optimizedSortPortfolio(m.portfolioSortField, m.portfolioSortDirection)
 		m.portfolioIsSorted = true
 		m.resetPortfolioCursor()
 		// Return to portfolio page
-		m.state = Monitoring
+		m.state = consts.Monitoring
 		m.message = ""
 		return m, nil
 	case "c", "C":
 		// Clear current sort - reload original data order
 		m.portfolioIsSorted = false
 		// Clear sort field and direction state
-		m.portfolioSortField = SortByCode  // Reset to default
-		m.portfolioSortDirection = SortAsc // Reset to default
+		m.portfolioSortField = consts.SortByCode  // Reset to default
+		m.portfolioSortDirection = consts.SortAsc // Reset to default
 		// Reload original data order
 		m.portfolio = loadPortfolio()
 		m.resetPortfolioCursor()
 		// Return to portfolio page
-		m.state = Monitoring
+		m.state = consts.Monitoring
 		m.message = m.getText("sortCleared")
 		return m, nil
 	case "esc", "q":
 		// Return to portfolio page
-		m.state = Monitoring
+		m.state = consts.Monitoring
 		m.message = ""
 		return m, nil
 	}
@@ -765,7 +766,7 @@ func (s *Stock) CalculateTotalQuantity() int {
 }
 
 func (m *Model) tickCmd() tea.Cmd {
-	return tea.Tick(refreshInterval, func(t time.Time) tea.Msg {
+	return tea.Tick(consts.RefreshInterval, func(t time.Time) tea.Msg {
 		return tickMsg{}
 	})
 }

@@ -1,69 +1,37 @@
 package main
 
 import (
-	"fmt"
 	"stock-monitor/internal/api"
-
-	"github.com/jedib0t/go-pretty/v6/text"
+	"stock-monitor/internal/ui"
 )
 
 // ============================================================================
-// 盈亏格式化函数 - 支持多语言颜色方案
+// 盈亏格式化函数 - 委托给 internal/ui.Formatter
 // 中文：红涨绿跌 | 英文：绿涨红跌
 // ============================================================================
 
 // formatProfitWithColorLang 格式化盈亏金额（带颜色）
 func (m *Model) formatProfitWithColorLang(profit float64) string {
-	if m.language == English {
-		// 英文：绿色盈利，红色亏损
-		if profit >= 0 {
-			return text.FgGreen.Sprintf("+%.2f", profit)
-		}
-		return text.FgRed.Sprintf("%.2f", profit)
-	} else {
-		// 中文：红色盈利，绿色亏损
-		if profit >= 0 {
-			return text.FgRed.Sprintf("+%.2f", profit)
-		}
-		return text.FgGreen.Sprintf("%.2f", profit)
-	}
+	formatter := ui.NewFormatter(m.language)
+	return formatter.FormatProfitWithColor(profit)
 }
 
 // formatProfitRateWithColorLang 格式化盈亏比例（带颜色）
 func (m *Model) formatProfitRateWithColorLang(rate float64) string {
-	if m.language == English {
-		// 英文：绿色盈利，红色亏损
-		if rate >= 0 {
-			return text.FgGreen.Sprintf("+%.2f%%", rate)
-		}
-		return text.FgRed.Sprintf("%.2f%%", rate)
-	} else {
-		// 中文：红色盈利，绿色亏损
-		if rate >= 0 {
-			return text.FgRed.Sprintf("+%.2f%%", rate)
-		}
-		return text.FgGreen.Sprintf("%.2f%%", rate)
-	}
+	formatter := ui.NewFormatter(m.language)
+	return formatter.FormatProfitRateWithColor(rate)
 }
 
 // formatProfitWithColorZeroLang 格式化盈亏金额（零值显示白色）
 func (m *Model) formatProfitWithColorZeroLang(profit float64) string {
-	// 当数值接近0时（考虑浮点数精度），显示白色（无颜色）
-	if abs(profit) < 0.001 {
-		return fmt.Sprintf("%.2f", profit)
-	}
-	// 否则使用语言相关颜色逻辑
-	return m.formatProfitWithColorLang(profit)
+	formatter := ui.NewFormatter(m.language)
+	return formatter.FormatProfitWithColorZero(profit)
 }
 
 // formatProfitRateWithColorZeroLang 格式化盈亏比例（零值显示白色）
 func (m *Model) formatProfitRateWithColorZeroLang(rate float64) string {
-	// 当数值接近0时（考虑浮点数精度），显示白色（无颜色）
-	if abs(rate) < 0.001 {
-		return fmt.Sprintf("%.2f%%", rate)
-	}
-	// 否则使用语言相关颜色逻辑
-	return m.formatProfitRateWithColorLang(rate)
+	formatter := ui.NewFormatter(m.language)
+	return formatter.FormatProfitRateWithColorZero(rate)
 }
 
 // formatProfitRateWithColorZeroLangForStock 格式化盈亏率（支持股票类型检测）
@@ -77,55 +45,24 @@ func (m *Model) formatProfitRateWithColorZeroLangForStock(rate float64, symbol s
 
 // formatPriceWithColorLang 格式化价格（根据涨跌显示颜色）
 func (m *Model) formatPriceWithColorLang(currentPrice, prevClose float64) string {
-	if prevClose == 0 {
-		// 如果昨收价为0，直接显示价格不加颜色
-		return fmt.Sprintf("%.3f", currentPrice)
-	}
-
-	if currentPrice > prevClose {
-		if m.language == English {
-			// 英文：高于昨收价显示绿色
-			return text.FgGreen.Sprintf("%.3f", currentPrice)
-		} else {
-			// 中文：高于昨收价显示红色
-			return text.FgRed.Sprintf("%.3f", currentPrice)
-		}
-	} else if currentPrice < prevClose {
-		if m.language == English {
-			// 英文：低于昨收价显示红色
-			return text.FgRed.Sprintf("%.3f", currentPrice)
-		} else {
-			// 中文：低于昨收价显示绿色
-			return text.FgGreen.Sprintf("%.3f", currentPrice)
-		}
-	} else {
-		// 等于昨收价显示白色（无颜色）
-		return fmt.Sprintf("%.3f", currentPrice)
-	}
+	formatter := ui.NewFormatter(m.language)
+	return formatter.FormatPriceWithColor(currentPrice, prevClose)
 }
 
 // ============================================================================
-// 其他格式化函数
+// 其他格式化函数 - 委托给 internal/ui
 // ============================================================================
 
 // formatVolume 格式化成交量（万/亿）
 func formatVolume(volume int64) string {
-	if volume >= 1000000000 {
-		return fmt.Sprintf("%.2f十亿", float64(volume)/1000000000)
-	} else if volume >= 100000000 {
-		return fmt.Sprintf("%.2f亿", float64(volume)/100000000)
-	} else if volume >= 10000 {
-		return fmt.Sprintf("%.2f万", float64(volume)/10000)
-	} else {
-		return fmt.Sprintf("%d", volume)
-	}
+	return ui.FormatVolume(volume)
 }
 
 // formatStockNameWithPortfolioHighlight 格式化股票名称（持仓股票高亮）
 func (m *Model) formatStockNameWithPortfolioHighlight(name, code string) string {
 	if m.isStockInPortfolio(code) {
 		// 使用颜色工具处理背景高亮
-		colorUtils := NewColorUtils()
+		colorUtils := ui.NewColorUtils()
 		configColor := m.config.Display.PortfolioHighlight
 
 		logDebug("log.highlight.found", name, code, configColor)
@@ -145,13 +82,10 @@ func (m *Model) formatStockNameWithPortfolioHighlight(name, code string) string 
 }
 
 // ============================================================================
-// 辅助函数
+// 辅助函数 - 委托给 internal/ui
 // ============================================================================
 
 // abs 返回浮点数的绝对值
 func abs(x float64) float64 {
-	if x < 0 {
-		return -x
-	}
-	return x
+	return ui.Abs(x)
 }

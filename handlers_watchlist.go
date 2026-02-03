@@ -1,6 +1,7 @@
 package main
 
 import (
+	"stock-monitor/internal/consts"
 	"fmt"
 	"stock-monitor/internal/ui"
 	"stock-monitor/internal/ui/watchlist"
@@ -18,7 +19,7 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "m":
 		m.stopIntradayDataCollection() // Stop intraday data collection
-		m.state = MainMenu
+		m.state = consts.MainMenu
 		m.message = ""
 		return m, nil
 	case "d":
@@ -68,7 +69,7 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			actualDate = getSmartChartDate()
 		}
 		m.chartViewDate = actualDate
-		m.previousState = WatchlistViewing
+		m.previousState = consts.WatchlistViewing
 
 		// Try to load data
 		data, loadErr := m.loadIntradayDataForDate(
@@ -81,7 +82,7 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// No data - trigger collection
 			m.chartData = nil
 			m.chartLoadError = nil
-			m.state = IntradayChartViewing
+			m.state = consts.IntradayChartViewing
 			return m, m.triggerIntradayDataCollection(
 				selectedStock.Code,
 				selectedStock.Name,
@@ -93,12 +94,12 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chartData = data
 		m.chartLoadError = nil
 		m.chartIsCollecting = false
-		m.state = IntradayChartViewing
+		m.state = consts.IntradayChartViewing
 		return m, nil
 	case "a":
 		// Jump to stock search page
 		logInfo("log.action.watchlistSearch")
-		m.state = SearchingStock
+		m.state = consts.SearchingStock
 		m.searchInput = ""
 		m.searchResult = nil
 		m.searchFromWatchlist = true
@@ -107,7 +108,7 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "s":
 		// Enter sort menu
 		logInfo("log.action.watchlistSort")
-		m.state = WatchlistSorting
+		m.state = consts.WatchlistSorting
 		// Smart position cursor to current sort field
 		m.watchlistSortCursor = m.findSortFieldIndex(m.watchlistSortField, false)
 		m.message = ""
@@ -131,7 +132,7 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		// Get all available tags
 		m.availableTags = m.getAvailableTags()
-		m.state = WatchlistTagManage
+		m.state = consts.WatchlistTagManage
 		m.tagManageCursor = 0
 		m.tagInput = ""
 		m.isInRemoveMode = false
@@ -151,13 +152,13 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stockAlertCode = currentStock.Code
 		m.stockAlertName = currentStock.Name
 		m.stockAlertCursor = 0
-		m.previousState = WatchlistViewing // Record return state
+		m.previousState = consts.WatchlistViewing // Record return state
 
 		// Get all alerts for this stock
 		m.stockAlertAlerts = m.getStockAlerts(currentStock.Code)
 
 		logInfo("log.action.enterStockAlertManagement", currentStock.Code, currentStock.Name)
-		m.state = StockAlertManage
+		m.state = consts.StockAlertManage
 		m.message = ""
 		return m, nil
 	case "g":
@@ -198,7 +199,7 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor = 0
 		}
 
-		m.state = WatchlistGroupSelect
+		m.state = consts.WatchlistGroupSelect
 		m.message = ""
 		return m, nil
 	case "c":
@@ -208,7 +209,7 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedUserTagFilter = ""
 			m.invalidateWatchlistCache() // Invalidate cache
 			m.resetWatchlistCursor()     // Reset cursor to first stock
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				m.message = "已清除所有过滤条件"
 			} else {
 				m.message = "All filters cleared"
@@ -247,7 +248,7 @@ func (m *Model) viewWatchlistViewing() string {
 			filterParts = append(filterParts, m.selectedUserTagFilter)
 		}
 
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += fmt.Sprintf("当前过滤: %s\n", strings.Join(filterParts, " + "))
 		} else {
 			s += fmt.Sprintf("Current filter: %s\n", strings.Join(filterParts, " + "))
@@ -269,7 +270,7 @@ func (m *Model) viewWatchlistViewing() string {
 				filterDesc = m.selectedUserTagFilter
 			}
 
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				s += fmt.Sprintf("过滤条件 '%s' 下没有股票\n\n", filterDesc)
 				s += "按G键选择其他过滤条件，或按C键清除过滤\n"
 			} else {
@@ -289,7 +290,7 @@ func (m *Model) viewWatchlistViewing() string {
 	maxWatchlistLines := m.config.Display.MaxLines
 	if totalWatchStocks > 0 {
 		currentPos := m.watchlistCursor + 1 // Display position starting from 1
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += fmt.Sprintf("⭐ 自选列表 (%d/%d) [↑/↓:翻页]\n", currentPos, totalWatchStocks)
 		} else {
 			s += fmt.Sprintf("⭐ Watchlist (%d/%d) [↑/↓:scroll]\n", currentPos, totalWatchStocks)
@@ -335,14 +336,14 @@ func (m *Model) viewWatchlistViewing() string {
 	if totalWatchStocks > maxWatchlistLines {
 		s += "\n" + strings.Repeat("-", 80) + "\n"
 		if m.watchlistScrollPos > 0 {
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				s += "↑ 有更新的自选股票 (按↓查看)\n"
 			} else {
 				s += "↑ Newer watchlist stocks available (press ↓)\n"
 			}
 		}
 		if m.watchlistScrollPos < totalWatchStocks-1 {
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				s += "↓ 有更多历史自选股票 (按↑查看)\n"
 			} else {
 				s += "↓ More watchlist stocks available (press ↑)\n"
@@ -383,19 +384,19 @@ func (m *Model) resetWatchlistCursor() {
 func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
-		m.state = WatchlistViewing
+		m.state = consts.WatchlistViewing
 		m.message = ""
 		m.resetWatchlistCursor()
 		return m, m.tickCmd() // Restart timer
 	case "n":
 		// Manually input new tag
-		m.state = WatchlistTagging
+		m.state = consts.WatchlistTagging
 		m.tagInput = ""
 		return m, nil
 	case "d":
 		// Delete currently selected tag (if current stock has it)
 		if len(m.availableTags) == 0 {
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				m.message = "没有可删除的标签"
 			} else {
 				m.message = "No tags to remove"
@@ -436,14 +437,14 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 							m.tagManageCursor = len(m.availableTags) - 1
 						}
 
-						if m.language == Chinese {
+						if m.language == consts.Chinese {
 							m.message = fmt.Sprintf("已删除标签: %s", selectedTag)
 						} else {
 							m.message = fmt.Sprintf("Removed tag: %s", selectedTag)
 						}
 						stockFound = true
 					} else {
-						if m.language == Chinese {
+						if m.language == consts.Chinese {
 							m.message = fmt.Sprintf("该股票没有标签: %s", selectedTag)
 						} else {
 							m.message = fmt.Sprintf("Stock doesn't have tag: %s", selectedTag)
@@ -455,7 +456,7 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 
 			if !stockFound {
-				if m.language == Chinese {
+				if m.language == consts.Chinese {
 					m.message = "找不到对应的股票"
 				} else {
 					m.message = "Stock not found"
@@ -466,7 +467,7 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "e":
 		// Edit currently selected tag
 		if len(m.availableTags) == 0 {
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				m.message = "没有可编辑的标签"
 			} else {
 				m.message = "No tags to edit"
@@ -478,7 +479,7 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		selectedTag := m.availableTags[m.tagManageCursor]
 
 		// Enter tag edit state
-		m.state = WatchlistTagEdit
+		m.state = consts.WatchlistTagEdit
 		m.tagToEdit = selectedTag
 		m.tagEditInput = selectedTag                    // Prefill with current tag name
 		m.tagEditInputCursor = len([]rune(selectedTag)) // Cursor at end
@@ -497,7 +498,7 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// Add selected tag to current stock
 		if len(m.availableTags) == 0 {
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				m.message = "没有可添加的标签，按N键创建新标签"
 			} else {
 				m.message = "No tags to add, press N to create new tag"
@@ -529,13 +530,13 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 							}
 						}
 
-						if m.language == Chinese {
+						if m.language == consts.Chinese {
 							m.message = fmt.Sprintf("已添加标签: %s", selectedTag)
 						} else {
 							m.message = fmt.Sprintf("Added tag: %s", selectedTag)
 						}
 					} else {
-						if m.language == Chinese {
+						if m.language == consts.Chinese {
 							m.message = fmt.Sprintf("该股票已有标签: %s", selectedTag)
 						} else {
 							m.message = fmt.Sprintf("Stock already has tag: %s", selectedTag)
@@ -547,7 +548,7 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 
 			if !stockFound {
-				if m.language == Chinese {
+				if m.language == consts.Chinese {
 					m.message = "找不到对应的股票"
 				} else {
 					m.message = "Stock not found"
@@ -562,7 +563,7 @@ func (m *Model) handleWatchlistTagManage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) viewWatchlistTagManage() string {
 	var s string
 
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		s += "=== 标签管理 ===\n\n"
 	} else {
 		s += "=== Tag Management ===\n\n"
@@ -571,7 +572,7 @@ func (m *Model) viewWatchlistTagManage() string {
 	filteredStocks := m.getFilteredWatchlist()
 	if m.watchlistCursor >= 0 && m.watchlistCursor < len(filteredStocks) {
 		stock := filteredStocks[m.watchlistCursor]
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += fmt.Sprintf("股票: %s (%s)\n", stock.Name, stock.Code)
 			marketTag := m.getMarketTagName(stock.Market)
 			s += fmt.Sprintf("当前标签: %s\n\n", watchlist.GetTagsDisplay(&stock, marketTag))
@@ -583,7 +584,7 @@ func (m *Model) viewWatchlistTagManage() string {
 
 		// Display all available tags, mark those owned by current stock
 		if len(m.availableTags) > 0 {
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				s += "所有可用标签:\n"
 			} else {
 				s += "All available tags:\n"
@@ -599,7 +600,7 @@ func (m *Model) viewWatchlistTagManage() string {
 				hasTag := watchlist.HasTag(&stock, tag)
 				status := ""
 				if hasTag {
-					if m.language == Chinese {
+					if m.language == consts.Chinese {
 						status = " ✓ (已拥有)"
 					} else {
 						status = " ✓ (owned)"
@@ -610,7 +611,7 @@ func (m *Model) viewWatchlistTagManage() string {
 			}
 			s += "\n"
 		} else {
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				s += "暂无可用标签，按N键创建新标签\n\n"
 			} else {
 				s += "No available tags, press N to create new tag\n\n"
@@ -618,7 +619,7 @@ func (m *Model) viewWatchlistTagManage() string {
 		}
 
 		// Operation instructions
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += "操作说明:\n"
 			s += "  ↑↓ - 选择标签\n"
 			s += "  Enter - 添加/切换选中标签\n"
@@ -650,7 +651,7 @@ func (m *Model) handleWatchlistTagging(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.tagInput == "" {
 			// Return to tag management view
 			m.availableTags = m.getAvailableTags()
-			m.state = WatchlistTagManage
+			m.state = consts.WatchlistTagManage
 			m.tagManageCursor = 0
 			return m, nil
 		}
@@ -690,7 +691,7 @@ func (m *Model) handleWatchlistTagging(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.invalidateWatchlistCache()
 			m.saveWatchlist()
 
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				m.message = fmt.Sprintf("已为 %s 添加标签: %s",
 					stockToTag.Name, m.tagInput)
 			} else {
@@ -701,7 +702,7 @@ func (m *Model) handleWatchlistTagging(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		// Return to tag management view
 		m.availableTags = m.getAvailableTags()
-		m.state = WatchlistTagManage
+		m.state = consts.WatchlistTagManage
 		m.tagManageCursor = 0
 		m.tagInput = ""
 		m.tagInputCursor = 0
@@ -709,7 +710,7 @@ func (m *Model) handleWatchlistTagging(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "q":
 		// Return to tag management view
 		m.availableTags = m.getAvailableTags()
-		m.state = WatchlistTagManage
+		m.state = consts.WatchlistTagManage
 		m.tagManageCursor = 0
 		m.tagInput = ""
 		m.tagInputCursor = 0
@@ -782,7 +783,7 @@ func (m *Model) handleWatchlistTagSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Execute operation based on current selection
 		if m.tagSelectCursor == len(m.availableTags) {
 			// Selected "manually input new tag" option
-			m.state = WatchlistTagging
+			m.state = consts.WatchlistTagging
 			m.tagInput = ""
 			return m, nil
 		} else if m.tagSelectCursor >= 0 && m.tagSelectCursor < len(m.availableTags) {
@@ -805,7 +806,7 @@ func (m *Model) handleWatchlistTagSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.invalidateWatchlistCache() // Invalidate cache
 				m.saveWatchlist()
 
-				if m.language == Chinese {
+				if m.language == consts.Chinese {
 					m.message = fmt.Sprintf("已为 %s 添加标签: %s",
 						stockToTag.Name, selectedTag)
 				} else {
@@ -814,7 +815,7 @@ func (m *Model) handleWatchlistTagSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			m.state = WatchlistViewing
+			m.state = consts.WatchlistViewing
 			m.tagInput = ""
 			m.resetWatchlistCursor() // Reset cursor to first stock
 			return m, m.tickCmd()    // Restart timer
@@ -840,7 +841,7 @@ func (m *Model) handleWatchlistTagSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 
 			if len(validTags) == 0 {
-				if m.language == Chinese {
+				if m.language == consts.Chinese {
 					m.message = fmt.Sprintf("%s 没有可删除的标签", stockToModify.Name)
 				} else {
 					m.message = fmt.Sprintf("%s has no tags to remove", stockToModify.Name)
@@ -851,12 +852,12 @@ func (m *Model) handleWatchlistTagSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Set tag deletion state
 			m.currentStockTags = validTags
 			m.tagRemoveCursor = 0
-			m.state = WatchlistTagRemoveSelect
+			m.state = consts.WatchlistTagRemoveSelect
 			return m, nil
 		}
 		return m, nil
 	case "esc", "q":
-		m.state = WatchlistViewing
+		m.state = consts.WatchlistViewing
 		m.tagInput = ""
 		m.message = ""
 		m.resetWatchlistCursor() // Reset cursor to first stock
@@ -875,7 +876,7 @@ func (m *Model) handleWatchlistTagSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) viewWatchlistTagSelect() string {
 	var s string
 
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		s += "=== 管理标签 ===\n\n"
 	} else {
 		s += "=== Manage Tags ===\n\n"
@@ -884,7 +885,7 @@ func (m *Model) viewWatchlistTagSelect() string {
 	filteredStocks := m.getFilteredWatchlist()
 	if m.watchlistCursor >= 0 && m.watchlistCursor < len(filteredStocks) {
 		stock := filteredStocks[m.watchlistCursor]
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += fmt.Sprintf("股票: %s (%s)\n", stock.Name, stock.Code)
 			marketTag := m.getMarketTagName(stock.Market)
 			s += fmt.Sprintf("当前标签: %s\n\n", watchlist.GetTagsDisplay(&stock, marketTag))
@@ -937,7 +938,7 @@ func (m *Model) viewWatchlistTagSelect() string {
 
 	// Display existing tag options
 	if len(m.availableTags) > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += "可添加的系统标签:\n"
 		} else {
 			s += "Available system tags to add:\n"
@@ -958,7 +959,7 @@ func (m *Model) viewWatchlistTagSelect() string {
 	if m.tagSelectCursor == len(m.availableTags) {
 		cursor = "► "
 	}
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		s += fmt.Sprintf("%s手动输入新标签\n\n", cursor)
 		s += "操作: ↑↓选择 Enter添加标签 D进入删除模式 ESC/Q取消"
 	} else {
@@ -976,7 +977,7 @@ func (m *Model) viewWatchlistTagSelect() string {
 func (m *Model) handleWatchlistTagRemoveSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
-		m.state = WatchlistTagManage
+		m.state = consts.WatchlistTagManage
 		return m, nil
 	case "enter":
 		if m.tagRemoveCursor >= 0 && m.tagRemoveCursor < len(m.currentStockTags) {
@@ -1015,7 +1016,7 @@ func (m *Model) handleWatchlistTagRemoveSelect(msg tea.KeyMsg) (tea.Model, tea.C
 					}
 				}
 
-				if m.language == Chinese {
+				if m.language == consts.Chinese {
 					m.message = fmt.Sprintf("已从 %s 删除标签: %s", stockToModify.Name, tagToRemove)
 				} else {
 					m.message = fmt.Sprintf("Removed tag from %s: %s", stockToModify.Name, tagToRemove)
@@ -1023,7 +1024,7 @@ func (m *Model) handleWatchlistTagRemoveSelect(msg tea.KeyMsg) (tea.Model, tea.C
 
 				// If no more tags to delete, return to tag management
 				if len(m.currentStockTags) == 0 {
-					m.state = WatchlistTagManage
+					m.state = consts.WatchlistTagManage
 				} else {
 					// Adjust cursor position
 					if m.tagRemoveCursor >= len(m.currentStockTags) {
@@ -1046,7 +1047,7 @@ func (m *Model) handleWatchlistTagRemoveSelect(msg tea.KeyMsg) (tea.Model, tea.C
 func (m *Model) viewWatchlistTagRemoveSelect() string {
 	var s string
 
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		s += "=== 选择要删除的标签 ===\n\n"
 	} else {
 		s += "=== Select Tag to Remove ===\n\n"
@@ -1055,7 +1056,7 @@ func (m *Model) viewWatchlistTagRemoveSelect() string {
 	filteredStocks := m.getFilteredWatchlist()
 	if m.watchlistCursor >= 0 && m.watchlistCursor < len(filteredStocks) {
 		stock := filteredStocks[m.watchlistCursor]
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += fmt.Sprintf("股票: %s (%s)\n\n", stock.Name, stock.Code)
 			s += "请选择要删除的标签:\n\n"
 		} else {
@@ -1073,7 +1074,7 @@ func (m *Model) viewWatchlistTagRemoveSelect() string {
 		}
 
 		s += "\n"
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += "操作: ↑↓选择标签 Enter删除 ESC/Q取消"
 		} else {
 			s += "Actions: ↑↓ select tag, Enter remove, ESC/Q cancel"
@@ -1091,7 +1092,7 @@ func (m *Model) handleWatchlistTagEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		// Cancel edit, return to tag management
-		m.state = WatchlistTagManage
+		m.state = consts.WatchlistTagManage
 		m.message = m.getText("tagEditCanceled")
 		m.tagEditInput = ""
 		m.tagEditInputCursor = 0
@@ -1132,7 +1133,7 @@ func (m *Model) handleWatchlistTagEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf(m.getText("tagEditSuccess"), m.tagToEdit, newTagName, updatedCount)
 
 		// Return to tag management
-		m.state = WatchlistTagManage
+		m.state = consts.WatchlistTagManage
 		m.tagEditInput = ""
 		m.tagEditInputCursor = 0
 		m.tagToEdit = ""
@@ -1179,7 +1180,7 @@ func (m *Model) viewWatchlistTagEdit() string {
 	s += fmt.Sprintf(m.getText("editingTag"), m.tagToEdit) + "\n\n"
 	s += m.getText("enterNewTagName") + ui.FormatTextWithCursor(m.tagEditInput, m.tagEditInputCursor) + "\n\n"
 
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		s += "提示: 修改后将更新所有使用此标签的股票\n"
 		s += "操作: ←/→移动光标, Enter确认, ESC/Q取消, Home/End跳转首尾"
 	} else {
@@ -1236,7 +1237,7 @@ func (m *Model) handleWatchlistGroupSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 
 			m.invalidateWatchlistCache()
 			m.filterSelectionStep = 0
-			m.state = WatchlistViewing
+			m.state = consts.WatchlistViewing
 			m.resetWatchlistCursor()
 			m.message = ""
 			return m, m.tickCmd()
@@ -1245,7 +1246,7 @@ func (m *Model) handleWatchlistGroupSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	case "esc", "q":
 		m.filterSelectionStep = 0
 		m.selectedMarketFilter = ""
-		m.state = WatchlistViewing
+		m.state = consts.WatchlistViewing
 		m.message = ""
 		return m, m.tickCmd()
 
@@ -1255,7 +1256,7 @@ func (m *Model) handleWatchlistGroupSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		m.selectedUserTagFilter = ""
 		m.invalidateWatchlistCache()
 		m.filterSelectionStep = 0
-		m.state = WatchlistViewing
+		m.state = consts.WatchlistViewing
 		m.resetWatchlistCursor()
 		m.message = ""
 		return m, m.tickCmd()
@@ -1330,40 +1331,40 @@ func (m *Model) handleWatchlistSorting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		selectedField := sortFields[m.watchlistSortCursor]
 		if m.watchlistSortField == selectedField {
 			// Toggle sort direction
-			if m.watchlistSortDirection == SortAsc {
-				m.watchlistSortDirection = SortDesc
+			if m.watchlistSortDirection == consts.SortAsc {
+				m.watchlistSortDirection = consts.SortDesc
 			} else {
-				m.watchlistSortDirection = SortAsc
+				m.watchlistSortDirection = consts.SortAsc
 			}
 		} else {
 			// Set new sort field, default ascending
 			m.watchlistSortField = selectedField
-			m.watchlistSortDirection = SortAsc
+			m.watchlistSortDirection = consts.SortAsc
 		}
 		// Execute sort and mark as sorted
 		m.optimizedSortWatchlist(m.watchlistSortField, m.watchlistSortDirection)
 		m.watchlistIsSorted = true
 		m.resetWatchlistCursor()
 		// Return to watchlist page
-		m.state = WatchlistViewing
+		m.state = consts.WatchlistViewing
 		m.message = ""
 		return m, m.tickCmd() // Restart timer
 	case "c", "C":
 		// Clear current sort - reload original data order
 		m.watchlistIsSorted = false
 		// Clear sort field and direction state
-		m.watchlistSortField = SortByCode  // Reset to default
-		m.watchlistSortDirection = SortAsc // Reset to default
+		m.watchlistSortField = consts.SortByCode  // Reset to default
+		m.watchlistSortDirection = consts.SortAsc // Reset to default
 		// Reload original data order
 		m.watchlist = loadWatchlist()
 		m.resetWatchlistCursor()
 		// Return to watchlist page
-		m.state = WatchlistViewing
+		m.state = consts.WatchlistViewing
 		m.message = m.getText("sortCleared")
 		return m, m.tickCmd() // Restart timer
 	case "esc", "q":
 		// Return to watchlist page
-		m.state = WatchlistViewing
+		m.state = consts.WatchlistViewing
 		m.message = ""
 		return m, m.tickCmd() // Restart timer
 	}
@@ -1412,31 +1413,31 @@ func (m *Model) isStockInPortfolio(code string) bool {
 // getSortFieldName gets display name for sort field
 func (m *Model) getSortFieldName(field SortField) string {
 	switch field {
-	case SortByCode:
+	case consts.SortByCode:
 		return m.getText("sortCode")
-	case SortByName:
+	case consts.SortByName:
 		return m.getText("sortName")
-	case SortByPrice:
+	case consts.SortByPrice:
 		return m.getText("sortPrice")
-	case SortByCostPrice:
+	case consts.SortByCostPrice:
 		return m.getText("sortCostPrice")
-	case SortByChange:
+	case consts.SortByChange:
 		return m.getText("sortChange")
-	case SortByChangePercent:
+	case consts.SortByChangePercent:
 		return m.getText("sortChangePercent")
-	case SortByQuantity:
+	case consts.SortByQuantity:
 		return m.getText("sortQuantity")
-	case SortByTotalProfit:
+	case consts.SortByTotalProfit:
 		return m.getText("sortTotalProfit")
-	case SortByProfitRate:
+	case consts.SortByProfitRate:
 		return m.getText("sortProfitRate")
-	case SortByMarketValue:
+	case consts.SortByMarketValue:
 		return m.getText("sortMarketValue")
-	case SortByTag:
+	case consts.SortByTag:
 		return m.getText("sortTag")
-	case SortByTurnoverRate:
+	case consts.SortByTurnoverRate:
 		return m.getText("sortTurnoverRate")
-	case SortByVolume:
+	case consts.SortByVolume:
 		return m.getText("sortVolume")
 	default:
 		return "Unknown"
@@ -1445,7 +1446,7 @@ func (m *Model) getSortFieldName(field SortField) string {
 
 // getSortDirectionName gets display name for sort direction
 func (m *Model) getSortDirectionName(direction SortDirection) string {
-	if direction == SortAsc {
+	if direction == consts.SortAsc {
 		return m.getText("sortAsc")
 	}
 	return m.getText("sortDesc")
@@ -1454,17 +1455,17 @@ func (m *Model) getSortDirectionName(direction SortDirection) string {
 // getWatchlistSortFields gets available sort fields for watchlist
 func (m *Model) getWatchlistSortFields() []SortField {
 	return []SortField{
-		SortByCode, SortByName, SortByPrice, SortByTag,
-		SortByChangePercent, SortByTurnoverRate, SortByVolume,
+		consts.SortByCode, consts.SortByName, consts.SortByPrice, consts.SortByTag,
+		consts.SortByChangePercent, consts.SortByTurnoverRate, consts.SortByVolume,
 	}
 }
 
 // getPortfolioSortFields gets available sort fields for portfolio
 func (m *Model) getPortfolioSortFields() []SortField {
 	return []SortField{
-		SortByCode, SortByName, SortByPrice, SortByCostPrice,
-		SortByChange, SortByChangePercent, SortByQuantity,
-		SortByTotalProfit, SortByProfitRate, SortByMarketValue,
+		consts.SortByCode, consts.SortByName, consts.SortByPrice, consts.SortByCostPrice,
+		consts.SortByChange, consts.SortByChangePercent, consts.SortByQuantity,
+		consts.SortByTotalProfit, consts.SortByProfitRate, consts.SortByMarketValue,
 	}
 }
 

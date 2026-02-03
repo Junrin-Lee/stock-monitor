@@ -1,6 +1,7 @@
 package main
 
 import (
+	"stock-monitor/internal/consts"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -47,10 +48,10 @@ func loadI18nFiles() {
 	texts = make(map[Language]TextMap)
 
 	// 加载中文配置
-	loadLanguageFile("zh.json", Chinese)
+	loadLanguageFile("zh.json", consts.Chinese)
 
 	// 加载英文配置
-	loadLanguageFile("en.json", English)
+	loadLanguageFile("en.json", consts.English)
 
 	// 如果没有成功加载任何语言文件，退出程序
 	if len(texts) == 0 {
@@ -65,7 +66,7 @@ func (m *Model) getText(key string) string {
 		return text
 	}
 	// 如果找不到文本，返回英文版本作为备用
-	if text, exists := texts[English][key]; exists {
+	if text, exists := texts[consts.English][key]; exists {
 		return text
 	}
 	return key // 最后备用返回key本身
@@ -77,7 +78,7 @@ func getTextForLang(key string, lang Language) string {
 		return text
 	}
 	// 如果找不到文本，返回英文版本作为备用
-	if text, exists := texts[English][key]; exists {
+	if text, exists := texts[consts.English][key]; exists {
 		return text
 	}
 	return key // 最后备用返回key本身

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"stock-monitor/internal/consts"
 	"fmt"
 	"stock-monitor/internal/api"
 	"stock-monitor/internal/ui"
@@ -19,7 +20,7 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		if m.searchFromWatchlist {
-			m.state = WatchlistViewing
+			m.state = consts.WatchlistViewing
 			m.resetWatchlistCursor() // Reset cursor to first stock
 			m.searchFromWatchlist = false
 			m.searchInput = ""
@@ -27,7 +28,7 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.message = ""
 			return m, m.tickCmd() // Restart timer
 		} else {
-			m.state = MainMenu
+			m.state = consts.MainMenu
 		}
 		m.searchInput = ""
 		m.searchInputCursor = 0
@@ -70,9 +71,9 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		// Determine next state based on source
 		if m.searchFromWatchlist {
-			m.state = WatchlistSearchConfirm
+			m.state = consts.WatchlistSearchConfirm
 		} else {
-			m.state = SearchResultWithActions
+			m.state = consts.SearchResultWithActions
 		}
 
 		// Both states start temporary worker (auto-show chart)
@@ -114,7 +115,7 @@ func (m *Model) viewSearchingStock() string {
 	s += m.getText("enterSearch") + ui.FormatTextWithCursor(m.searchInput, m.searchInputCursor) + "\n\n"
 	s += m.getText("searchFormats") + "\n\n"
 
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		s += "操作: ←/→移动光标, Enter搜索, ESC返回, Home/End跳转首尾\n"
 	} else {
 		s += "Actions: ←/→ move cursor, Enter search, ESC back, Home/End jump\n"
@@ -134,11 +135,11 @@ func (m *Model) viewSearchingStock() string {
 func (m *Model) handleSearchResult(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
-		m.state = MainMenu
+		m.state = consts.MainMenu
 		m.message = ""
 		return m, nil
 	case "r":
-		m.state = SearchingStock
+		m.state = consts.SearchingStock
 		m.searchFromWatchlist = false
 		m.message = ""
 		return m, nil
@@ -164,7 +165,7 @@ func (m *Model) viewSearchResult() string {
 	var values []interface{}
 
 	// Basic info
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		headers = append(headers, "股票代码", "股票名称", "现价")
 	} else {
 		headers = append(headers, "Code", "Name", "Price")
@@ -173,7 +174,7 @@ func (m *Model) viewSearchResult() string {
 
 	// Previous close
 	if m.searchResult.PrevClose > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "昨收价")
 		} else {
 			headers = append(headers, "Prev Close")
@@ -183,7 +184,7 @@ func (m *Model) viewSearchResult() string {
 
 	// Price info (show only when available)
 	if m.searchResult.StartPrice > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "开盘价")
 		} else {
 			headers = append(headers, "Open")
@@ -191,7 +192,7 @@ func (m *Model) viewSearchResult() string {
 		values = append(values, m.formatPriceWithColorLang(m.searchResult.StartPrice, m.searchResult.PrevClose))
 	}
 	if m.searchResult.MaxPrice > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "最高价")
 		} else {
 			headers = append(headers, "High")
@@ -199,7 +200,7 @@ func (m *Model) viewSearchResult() string {
 		values = append(values, m.formatPriceWithColorLang(m.searchResult.MaxPrice, m.searchResult.PrevClose))
 	}
 	if m.searchResult.MinPrice > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "最低价")
 		} else {
 			headers = append(headers, "Low")
@@ -209,7 +210,7 @@ func (m *Model) viewSearchResult() string {
 
 	// Change info
 	if m.searchResult.Change != 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "涨跌额")
 		} else {
 			headers = append(headers, "Change")
@@ -218,7 +219,7 @@ func (m *Model) viewSearchResult() string {
 		values = append(values, changeStr)
 	}
 	if m.searchResult.ChangePercent != 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "今日涨幅")
 		} else {
 			headers = append(headers, "Change %")
@@ -229,7 +230,7 @@ func (m *Model) viewSearchResult() string {
 
 	// Turnover rate
 	if m.searchResult.TurnoverRate > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "换手率")
 		} else {
 			headers = append(headers, "Turnover")
@@ -239,7 +240,7 @@ func (m *Model) viewSearchResult() string {
 
 	// Volume
 	if m.searchResult.Volume > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "成交量")
 		} else {
 			headers = append(headers, "Volume")
@@ -270,7 +271,7 @@ func (m *Model) handleSearchResultWithActions(msg tea.KeyMsg) (tea.Model, tea.Cm
 			m.stopSearchIntradayWorker()
 		}
 
-		m.state = MainMenu
+		m.state = consts.MainMenu
 		m.message = ""
 		return m, nil
 	case "r":
@@ -279,7 +280,7 @@ func (m *Model) handleSearchResultWithActions(msg tea.KeyMsg) (tea.Model, tea.Cm
 			m.stopSearchIntradayWorker()
 		}
 
-		m.state = SearchingStock
+		m.state = consts.SearchingStock
 		m.searchFromWatchlist = false
 		m.message = ""
 		return m, nil
@@ -298,7 +299,7 @@ func (m *Model) handleSearchResultWithActions(msg tea.KeyMsg) (tea.Model, tea.Cm
 			}
 
 			// Jump to watchlist page
-			m.state = WatchlistViewing
+			m.state = consts.WatchlistViewing
 			m.resetWatchlistCursor() // Reset cursor to first stock
 			m.cursor = 0
 			m.lastUpdate = time.Now()
@@ -315,7 +316,7 @@ func (m *Model) handleSearchResultWithActions(msg tea.KeyMsg) (tea.Model, tea.Cm
 				m.stopSearchIntradayWorker()
 			}
 
-			m.state = AddingStock
+			m.state = consts.AddingStock
 			m.addingStep = 1 // Skip code input, go directly to cost input
 			m.tempCode = m.searchResult.Symbol
 			m.stockInfo = &StockData{
@@ -350,7 +351,7 @@ func (m *Model) viewSearchResultWithActions() string {
 	var values []interface{}
 
 	// Basic info
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		headers = append(headers, "股票代码", "股票名称", "现价")
 	} else {
 		headers = append(headers, "Code", "Name", "Price")
@@ -359,7 +360,7 @@ func (m *Model) viewSearchResultWithActions() string {
 
 	// Previous close
 	if m.searchResult.PrevClose > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "昨收价")
 		} else {
 			headers = append(headers, "Prev Close")
@@ -369,7 +370,7 @@ func (m *Model) viewSearchResultWithActions() string {
 
 	// Price info (show only when available)
 	if m.searchResult.StartPrice > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "开盘价")
 		} else {
 			headers = append(headers, "Open")
@@ -377,7 +378,7 @@ func (m *Model) viewSearchResultWithActions() string {
 		values = append(values, m.formatPriceWithColorLang(m.searchResult.StartPrice, m.searchResult.PrevClose))
 	}
 	if m.searchResult.MaxPrice > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "最高价")
 		} else {
 			headers = append(headers, "High")
@@ -385,7 +386,7 @@ func (m *Model) viewSearchResultWithActions() string {
 		values = append(values, m.formatPriceWithColorLang(m.searchResult.MaxPrice, m.searchResult.PrevClose))
 	}
 	if m.searchResult.MinPrice > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "最低价")
 		} else {
 			headers = append(headers, "Low")
@@ -395,7 +396,7 @@ func (m *Model) viewSearchResultWithActions() string {
 
 	// Change info
 	if m.searchResult.Change != 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "涨跌额")
 		} else {
 			headers = append(headers, "Change")
@@ -404,7 +405,7 @@ func (m *Model) viewSearchResultWithActions() string {
 		values = append(values, changeStr)
 	}
 	if m.searchResult.ChangePercent != 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "今日涨幅")
 		} else {
 			headers = append(headers, "Change %")
@@ -415,7 +416,7 @@ func (m *Model) viewSearchResultWithActions() string {
 
 	// Turnover rate
 	if m.searchResult.TurnoverRate > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "换手率")
 		} else {
 			headers = append(headers, "Turnover")
@@ -425,7 +426,7 @@ func (m *Model) viewSearchResultWithActions() string {
 
 	// Volume
 	if m.searchResult.Volume > 0 {
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			headers = append(headers, "成交量")
 		} else {
 			headers = append(headers, "Volume")
@@ -444,7 +445,7 @@ func (m *Model) viewSearchResultWithActions() string {
 	if m.isSearchMode {
 		// Render chart area separator
 		s += strings.Repeat("─", 80) + "\n"
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += "📈 实时分时图表 (每5秒自动刷新)\n\n"
 		} else {
 			s += "📈 Real-time Intraday Chart (Auto-refresh every 5s)\n\n"
@@ -461,7 +462,7 @@ func (m *Model) viewSearchResultWithActions() string {
 				s += chartModel.View() + "\n"
 
 				// Display update info
-				if m.language == Chinese {
+				if m.language == consts.Chinese {
 					s += fmt.Sprintf("最后更新: %s | 数据点: %d\n",
 						m.searchIntradayData.UpdatedAt,
 						len(m.searchIntradayData.Datapoints))
@@ -472,7 +473,7 @@ func (m *Model) viewSearchResultWithActions() string {
 				}
 			} else {
 				// Chart creation failed (terminal too small)
-				if m.language == Chinese {
+				if m.language == consts.Chinese {
 					s += "终端尺寸过小，无法显示图表\n"
 				} else {
 					s += "Terminal size too small to display chart\n"
@@ -480,7 +481,7 @@ func (m *Model) viewSearchResultWithActions() string {
 			}
 		} else {
 			// Data not yet loaded
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				s += "正在获取分时数据...\n"
 			} else {
 				s += "Loading intraday data...\n"
@@ -512,7 +513,7 @@ func (m *Model) handleWatchlistSearchConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd
 			m.stopSearchIntradayWorker()
 		}
 
-		m.state = WatchlistViewing
+		m.state = consts.WatchlistViewing
 		m.resetWatchlistCursor() // Reset cursor to first stock
 		m.searchFromWatchlist = false
 		m.message = ""
@@ -536,7 +537,7 @@ func (m *Model) handleWatchlistSearchConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd
 				m.stopSearchIntradayWorker()
 			}
 
-			m.state = WatchlistViewing
+			m.state = consts.WatchlistViewing
 			m.resetWatchlistCursor() // Reset cursor to first stock
 			m.searchFromWatchlist = false
 
@@ -552,7 +553,7 @@ func (m *Model) handleWatchlistSearchConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd
 			m.stopSearchIntradayWorker()
 		}
 
-		m.state = SearchingStock
+		m.state = consts.SearchingStock
 		m.searchInput = ""
 		m.searchResult = nil
 		m.message = ""
@@ -573,7 +574,7 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 	t.SetStyle(table.StyleLight)
 
 	// Set header
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		t.AppendHeader(table.Row{"名称", "现价", "昨收价", "开盘", "最高", "最低", "今日涨幅", "换手率", "成交量"})
 	} else {
 		t.AppendHeader(table.Row{"Name", "Price", "PrevClose", "Open", "High", "Low", "Today%", "Turnover", "Volume"})
@@ -652,7 +653,7 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 	if m.isSearchMode {
 		// Render chart area separator
 		s += strings.Repeat("─", 80) + "\n"
-		if m.language == Chinese {
+		if m.language == consts.Chinese {
 			s += "📈 实时分时图表 (每5秒自动刷新)\n\n"
 		} else {
 			s += "📈 Real-time Intraday Chart (Auto-refresh every 5s)\n\n"
@@ -669,7 +670,7 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 				s += chartModel.View() + "\n"
 
 				// Display update info
-				if m.language == Chinese {
+				if m.language == consts.Chinese {
 					s += fmt.Sprintf("最后更新: %s | 数据点: %d\n",
 						m.searchIntradayData.UpdatedAt,
 						len(m.searchIntradayData.Datapoints))
@@ -680,7 +681,7 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 				}
 			} else {
 				// Chart creation failed (terminal too small)
-				if m.language == Chinese {
+				if m.language == consts.Chinese {
 					s += "终端尺寸过小，无法显示图表\n"
 				} else {
 					s += "Terminal size too small to display chart\n"
@@ -688,7 +689,7 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 			}
 		} else {
 			// Data not yet loaded
-			if m.language == Chinese {
+			if m.language == consts.Chinese {
 				s += "正在获取分时数据...\n"
 			} else {
 				s += "Loading intraday data...\n"
@@ -698,7 +699,7 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 		s += "\n"
 	}
 
-	if m.language == Chinese {
+	if m.language == consts.Chinese {
 		s += "按回车键添加到自选列表，ESC键返回，R键重新搜索\n"
 	} else {
 		s += "Press Enter to add to watchlist, ESC to return, R to search again\n"

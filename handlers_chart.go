@@ -1,6 +1,7 @@
 package main
 
 import (
+	"stock-monitor/internal/consts"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -30,11 +31,11 @@ func (m *Model) startIntradayDataCollection() {
 	// 收集当前页面的股票（支持所有市场）
 	stocksToTrack := make(map[string]string) // code -> name
 
-	if m.state == Monitoring {
+	if m.state == consts.Monitoring {
 		for _, stock := range m.portfolio.Stocks {
 			stocksToTrack[stock.Code] = stock.Name
 		}
-	} else if m.state == WatchlistViewing {
+	} else if m.state == consts.WatchlistViewing {
 		for _, stock := range m.watchlist.Stocks {
 			stocksToTrack[stock.Code] = stock.Name
 		}
@@ -604,8 +605,8 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		m.state = m.previousState
 		m.chartData = nil
 
-		// 如果返回到 Monitoring 或 WatchlistViewing，需要重启定时器和数据更新
-		if m.previousState == Monitoring || m.previousState == WatchlistViewing {
+		// 如果返回到 consts.Monitoring 或 consts.WatchlistViewing，需要重启定时器和数据更新
+		if m.previousState == consts.Monitoring || m.previousState == consts.WatchlistViewing {
 			m.lastUpdate = time.Now()
 			// 返回定时器命令以恢复自动刷新
 			var cmds []tea.Cmd
@@ -964,7 +965,7 @@ func (m *Model) runSearchIntradayWorker(code, name, date string) {
 		select {
 		case <-ticker.C:
 			// 检查是否仍在搜索模式
-			if !m.isSearchMode || m.state != SearchResultWithActions {
+			if !m.isSearchMode || m.state != consts.SearchResultWithActions {
 				logDebug("log.search.workerAutoStop", code)
 				return
 			}

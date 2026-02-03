@@ -111,7 +111,7 @@ var (
 // 需要添加方法的类型 - 在 main 包中独立定义
 // ============================================================================
 
-// Stock 持仓股票数据结构
+// Stock 持仓股票数据结构 - 需要方法，保持独立定义
 type Stock struct {
 	Code          string  `json:"code"`
 	Name          string  `json:"name"`
@@ -126,20 +126,8 @@ type Stock struct {
 	PrevClose     float64 `json:"prev_close"`
 }
 
-// StockData 股票市场数据（来自API）
-type StockData struct {
-	Symbol        string  `json:"symbol"`
-	Name          string  `json:"name"`
-	Price         float64 `json:"price"`
-	Change        float64 `json:"change"`
-	ChangePercent float64 `json:"change_percent"`
-	StartPrice    float64 `json:"start_price"`
-	MaxPrice      float64 `json:"max_price"`
-	MinPrice      float64 `json:"min_price"`
-	PrevClose     float64 `json:"prev_close"` // 昨日收盘价
-	TurnoverRate  float64 `json:"turnover_rate"`
-	Volume        int64   `json:"volume"`
-}
+// StockData 股票市场数据（来自API）- 使用别名
+type StockData = types.StockData
 
 // WatchlistStock 自选股票数据结构 (使用别名)
 type WatchlistStock = types.WatchlistStock
@@ -150,42 +138,19 @@ type Watchlist = types.Watchlist
 // TagGroup 标签分组结构 (v5.6) (使用别名)
 type TagGroup = types.TagGroup
 
-// Portfolio 持仓组合
+// Portfolio 持仓组合 - 需要使用 main.Stock，保持独立定义
 type Portfolio struct {
 	Stocks []Stock `json:"stocks"`
 }
 
-// Alert 告警规则
-type Alert struct {
-	ID            string           `json:"id"`             // 唯一标识符（UUID v4）
-	StockCode     string           `json:"code"`           // 股票代码
-	StockName     string           `json:"name"`           // 股票名称
-	Type          AlertType        `json:"type"`           // 告警类型
-	Condition     string           `json:"condition"`      // 条件（">" / "<" / ">=" / "<="）
-	Threshold     float64          `json:"threshold"`      // 阈值（价格或百分比）
-	IsActive      bool             `json:"is_active"`      // 是否启用
-	Frequency     TriggerFrequency `json:"frequency"`      // 触发频率
-	FrequencyDays int              `json:"frequency_days"` // 自定义天数间隔（仅 every_n_days 模式）
-	CreatedAt     time.Time        `json:"created_at"`     // 创建时间
-	UpdatedAt     time.Time        `json:"updated_at"`     // 最近更新时间
-	TriggeredAt   time.Time        `json:"triggered_at"`   // 最后触发时间
-	LastChecked   time.Time        `json:"last_checked"`   // 最后检查时间
-	BatchTag      string           `json:"batch_tag"`      // 批量标签名（批量添加时）
-}
+// Alert 告警规则 - 使用别名
+type Alert = types.Alert
 
-// AlertData 告警配置文件
-type AlertData struct {
-	Alerts     []Alert `json:"alerts"`
-	LastCheck  string  `json:"last_check"`
-	AlertCount int     `json:"alert_count"`
-}
+// AlertData 告警配置文件 - 使用别名
+type AlertData = types.AlertData
 
-// StockPriceCacheEntry 股价缓存条目结构
-type StockPriceCacheEntry struct {
-	Data       *StockData `json:"data"`        // 股价数据
-	UpdateTime time.Time  `json:"update_time"` // 数据更新时间
-	IsUpdating bool       `json:"is_updating"` // 是否正在更新中
-}
+// StockPriceCacheEntry 股价缓存条目结构 - 使用别名
+type StockPriceCacheEntry = types.StockPriceCacheEntry
 
 // Model 应用程序主模型
 type Model struct {
@@ -307,8 +272,8 @@ type Model struct {
 	alertThreshold         float64          // 告警阈值
 	currentAlert           Alert            // 当前操作的告警
 	batchAlertTag          string           // 批量添加的标签
-	stockAlertCode         string           // 当前股票的代码（StockAlertManage状态使用）
-	stockAlertName         string           // 当前股票的名称（StockAlertManage状态使用）
+	stockAlertCode         string           // 当前股票的代码（consts.StockAlertManage状态使用）
+	stockAlertName         string           // 当前股票的名称（consts.StockAlertManage状态使用）
 	stockAlertCursor       int              // 股票告警列表光标
 	stockAlertAlerts       []Alert          // 当前股票的所有告警（缓存）
 	batchSelectedStocks    []string         // 批量选中的股票代码
