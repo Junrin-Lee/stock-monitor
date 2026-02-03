@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # Job 1: Use GoReleaser to build all platforms
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: Upload macOS artifacts for DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: dist/*darwin*
+
+  # Job 2: Create DMG on macOS
+  create-dmg:
+    needs: goreleaser
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download macOS binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-binaries
+          path: dist
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Extract and create DMG
+        run: |
+          # Extract Universal Binary
+          mkdir -p dmg-contents
+          tar -xzf dist/stock-monitor_*_Darwin_universal.tar.gz -C dmg-contents
+
+          # Create DMG
+          create-dmg \
+            --volname "Stock Monitor" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 80 \
+            --hide-extension "stock-monitor" \
+            "stock-monitor_${{ github.ref_name }}_macOS_universal.dmg" \
+            "dmg-contents/"
+
+      - name: Upload DMG to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.dmg"

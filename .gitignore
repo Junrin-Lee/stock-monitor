@@ -28,3 +28,6 @@ coverage.html
 /cmd/conf/config.yml
 
 /.rebase-temp
+
+# GoReleaser
+/dist/

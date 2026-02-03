@@ -1,0 +1,111 @@
+version: 2
+
+project_name: stock-monitor
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+
+builds:
+  - id: stock-monitor
+    main: .
+    binary: stock-monitor
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .Date }}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+# macOS Universal Binary
+universal_binaries:
+  - id: stock-monitor-universal
+    ids:
+      - stock-monitor
+    replace: true
+    name_template: stock-monitor
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "all" }}universal
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README*
+      - LICENSE*
+      - cmd/conf/config_demo.yaml
+      - i18n/*.json
+
+# Linux packages
+nfpms:
+  - id: stock-monitor-packages
+    package_name: stock-monitor
+    vendor: Stock Monitor Project
+    homepage: https://github.com/Junrin-Lee/stock-monitor
+    maintainer: Kaeya
+    description: Professional TUI for real-time stock monitoring
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: ./cmd/conf/config_demo.yaml
+        dst: /etc/stock-monitor/config.yaml
+        type: "config|noreplace"
+      - src: ./i18n/*.json
+        dst: /usr/share/stock-monitor/i18n/
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - Merge pull request
+
+release:
+  draft: false
+  prerelease: auto
+  header: |
+    ## Stock Monitor {{ .Tag }}
+
+    专业的终端股票监控工具，支持 A 股、港股、美股实时行情追踪。
+
+# Homebrew (self-hosted in this repository)
+brews:
+  - name: stock-monitor
+    repository:
+      owner: Kaeya
+      name: stock-monitor        # Uses this repository
+      branch: master
+    directory: Formula
+    homepage: https://github.com/Junrin-Lee/stock-monitor
+    description: Professional TUI for real-time stock monitoring
+    license: MIT
+    install: |
+      bin.install "stock-monitor"
+    test: |
+      system "#{bin}/stock-monitor", "--version"

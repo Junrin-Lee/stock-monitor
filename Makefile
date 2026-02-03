@@ -116,3 +116,21 @@ test-stats:
 	@echo "测试函数数:"
 	@grep -r "^func Test" internal --include="*_test.go" | wc -l
 	@echo ""
+
+# Release management
+.PHONY: release-check release-snapshot release-dry-run
+
+release-check:  ## Check GoReleaser configuration
+	@echo "🔍 Checking GoReleaser configuration..."
+	@goreleaser check
+	@echo "✅ Configuration is valid!"
+
+release-snapshot:  ## Build snapshot release (no publish)
+	@echo "📦 Building snapshot release..."
+	@goreleaser release --snapshot --clean
+	@echo "✅ Snapshot built in dist/ directory"
+
+release-dry-run:  ## Simulate release process (no publish)
+	@echo "🧪 Simulating release process..."
+	@goreleaser release --skip=publish --clean
+	@echo "✅ Dry run completed!"

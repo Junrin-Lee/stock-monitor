@@ -17,6 +17,13 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
+// Version information, injected at build time via ldflags
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 // globalModel 全局模型引用，用于日志记录的 i18n 支持
 var globalModel *Model
 
@@ -57,6 +64,12 @@ func getMenuItems(lang Language) []MenuItem {
 }
 
 func main() {
+	// Handle --version flag
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("stock-monitor %s (commit: %s, built: %s)\n", version, commit, date)
+		os.Exit(0)
+	}
+
 	// 初始化应用程序（创建目录和UI组件）
 	if err := app.InitializeApp(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize app: %v\n", err)
