@@ -10,7 +10,7 @@ class StockMonitor < Formula
 
   on_macos do
     url "https://github.com/Junrin-Lee/stock-monitor/releases/download/v1.4.0/stock-monitor_1.4.0_Darwin_universal.tar.gz"
-    sha256 "3accdb9be6ce08d2abcc23beda158100b4bc4a1480f6afd06288a06909d9e63a"
+    sha256 "ccafa14d536f26e1d49edc79aa0f3e4153309c269dfdf90cde29933946d65488"
 
     def install
       bin.install "stock-monitor"
@@ -20,14 +20,14 @@ class StockMonitor < Formula
   on_linux do
     if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
       url "https://github.com/Junrin-Lee/stock-monitor/releases/download/v1.4.0/stock-monitor_1.4.0_Linux_x86_64.tar.gz"
-      sha256 "1f4196b2ee109ee4882b9abf7577b812d05c120f546a5116bb1175cf0c2e4829"
+      sha256 "eac5c713f33ec7c41e79ce646c6a11a325d959edfd717a93e38d091e659ea031"
       def install
         bin.install "stock-monitor"
       end
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
       url "https://github.com/Junrin-Lee/stock-monitor/releases/download/v1.4.0/stock-monitor_1.4.0_Linux_arm64.tar.gz"
-      sha256 "4c1673e0cb73a3c89c6153c52c91f6aa76e4dfce8c490e319e3f7591a85af196"
+      sha256 "596daefeefde1c7c3869d825db5af39dad0d8ba049d1a259597f0d27e4c62cfa"
       def install
         bin.install "stock-monitor"
       end
