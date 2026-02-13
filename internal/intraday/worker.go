@@ -57,41 +57,7 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 	for {
 		select {
 		case <-ticker.C:
-			// === 步骤 1: 获取并保存数据 ===
-			// 对于 Live 模式，检查市场是否开市
-			if mode == types.CollectionModeLive {
-				if !IsMarketOpen(stockCode, im.model) {
-					continue // 市场未开，跳过本次采集
-				}
-			}
-
-			//获取 worker 槽位（限制并发数）
-			im.workerPool <- struct{}{}
-			go func() {
-				defer func() { <-im.workerPool }()
-				decision, err := im.fetchAndSaveIntradayData(stockCode, stockName, im.model, true, targetDate)
-
-				// 更新元数据
-				im.metadataMutex.Lock()
-				if meta, exists := im.workerMetadata[stockCode]; exists {
-					meta.LastUpdateTime = time.Now()
-					if err != nil {
-						meta.ConsecutiveErrors++
-						meta.ConsecutiveSkips = 0 // 重置连续跳过计数
-					} else {
-						meta.ConsecutiveErrors = 0
-						// 根据 SaveDecision 更新计数器
-						if decision == SaveDecisionSkip {
-							meta.ConsecutiveSkips++
-						} else {
-							meta.ConsecutiveSkips = 0 // 有数据变化，重置连续跳过计数
-						}
-					}
-				}
-				im.metadataMutex.Unlock()
-			}()
-
-			// === 步骤 2: 检查自动停止条件 ===
+			// === 步骤 1: 检查自动停止条件（在 fetch 前检查，避免读取旧数据） ===
 			im.metadataMutex.RLock()
 			meta, exists := im.workerMetadata[stockCode]
 			im.metadataMutex.RUnlock()
@@ -143,6 +109,53 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 					}
 				}
 			}
+
+			// === 步骤 2: 获取并保存数据 ===
+			// 对于 Live 模式，检查市场是否开市
+			if mode == types.CollectionModeLive {
+				if !IsMarketOpen(stockCode, im.model) {
+					// 午休期间重置连续跳过计数，防止下午开盘后误触自动停止
+					marketType := string(api.GetMarketType(stockCode))
+					location, _ := GetMarketLocation(marketType)
+					if location != nil {
+						now := time.Now().In(location)
+						if GetTradingState(now, marketType) == types.TradingStateLunchBreak {
+							im.metadataMutex.Lock()
+							if meta, exists := im.workerMetadata[stockCode]; exists {
+								meta.ConsecutiveSkips = 0
+							}
+							im.metadataMutex.Unlock()
+						}
+					}
+					continue // 市场未开，跳过本次采集
+				}
+			}
+
+			//获取 worker 槽位（限制并发数）
+			im.workerPool <- struct{}{}
+			go func() {
+				defer func() { <-im.workerPool }()
+				decision, err := im.fetchAndSaveIntradayData(stockCode, stockName, im.model, true, targetDate)
+
+				// 更新元数据
+				im.metadataMutex.Lock()
+				if meta, exists := im.workerMetadata[stockCode]; exists {
+					meta.LastUpdateTime = time.Now()
+					if err != nil {
+						meta.ConsecutiveErrors++
+						meta.ConsecutiveSkips = 0 // 重置连续跳过计数
+					} else {
+						meta.ConsecutiveErrors = 0
+						// 根据 SaveDecision 更新计数器
+						if decision == SaveDecisionSkip {
+							meta.ConsecutiveSkips++
+						} else {
+							meta.ConsecutiveSkips = 0 // 有数据变化，重置连续跳过计数
+						}
+					}
+				}
+				im.metadataMutex.Unlock()
+			}()
 
 		case <-im.CancelChan:
 			// 全局取消信号

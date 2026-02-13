@@ -20,6 +20,7 @@ func (m *Model) handleSectorViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "m":
 		// 返回主菜单
+		m.stopIntradayDataCollection()
 		m.state = consts.MainMenu
 		m.message = ""
 		return m, nil
@@ -116,6 +117,7 @@ func (m *Model) handleSectorStockList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		// 返回板块列表
+		m.stopIntradayDataCollection()
 		m.state = consts.SectorViewing
 		m.message = ""
 		return m, nil

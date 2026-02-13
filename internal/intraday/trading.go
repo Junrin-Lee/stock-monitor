@@ -52,11 +52,15 @@ func GetTradingState(now time.Time, marketType string) types.TradingState {
 	// 判断当前状态
 	if now.Before(morningStart) {
 		return types.TradingStatePreMarket
-	} else if (now.After(morningStart) && now.Before(morningEnd)) ||
-		(now.After(afternoonStart) && now.Before(afternoonEnd)) {
+	} else if (!now.Before(morningStart) && now.Before(morningEnd)) ||
+		(!now.Before(afternoonStart) && now.Before(afternoonEnd)) {
 		return types.TradingStateLive
-	} else {
+	} else if !now.Before(morningEnd) && now.Before(afternoonStart) {
+		return types.TradingStateLunchBreak // 午休时段
+	} else if !now.Before(afternoonEnd) {
 		return types.TradingStatePostMarket
+	} else {
+		return types.TradingStatePostMarket // 安全兜底
 	}
 }
 
@@ -132,6 +136,10 @@ func GetTradingDayForCollection(stockCode string, m ModelInterface) (string, typ
 
 	case types.TradingStateLive:
 		// 交易中 -> 获取当日实时数据
+		return now.Format("20060102"), types.CollectionModeLive, nil
+
+	case types.TradingStateLunchBreak:
+		// 午休期间按 Live 模式处理当日数据
 		return now.Format("20060102"), types.CollectionModeLive, nil
 
 	case types.TradingStatePostMarket:
@@ -251,7 +259,7 @@ func isMarketOpenForConfig(now time.Time, sessions []interface{}) bool {
 				startTime := time.Date(now.Year(), now.Month(), now.Day(), startParts[0], startParts[1], 0, 0, now.Location())
 				endTime := time.Date(now.Year(), now.Month(), now.Day(), endParts[0], endParts[1], 0, 0, now.Location())
 
-				if now.After(startTime) && now.Before(endTime) {
+				if !now.Before(startTime) && now.Before(endTime) {
 					return true
 				}
 			}

@@ -42,6 +42,7 @@ const (
 	TradingStatePostMarket                     // 盘后（收盘后，当日）
 	TradingStateWeekend                        // 周末
 	TradingStateHoliday                        // 假日
+	TradingStateLunchBreak                     // 午休（A股、港股专用）
 )
 
 // String returns the string representation of TradingState
@@ -57,6 +58,8 @@ func (t TradingState) String() string {
 		return "Weekend"
 	case TradingStateHoliday:
 		return "Holiday"
+	case TradingStateLunchBreak:
+		return "LunchBreak"
 	default:
 		return "Unknown"
 	}
