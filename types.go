@@ -259,6 +259,7 @@ type Model struct {
 	chartCollectStartTime time.Time     // 开始采集的时间
 	chartPeriod           string        // 图表周期: "1D"(默认), "5D", "1M", "3M", "1Y"
 	chartMultiDayDates    []string      // 多周期模式：实际加载的日期列表
+	chartMultiDayBounds   []int         // 多周期模式：各日在降采样数据中的起始索引
 
 	// For search mode intraday - 搜索模式临时分时数据
 	isSearchMode           bool          // 是否处于搜索模式（用于区分数据来源）

@@ -149,11 +149,13 @@ func (m *Model) loadIntradayDataForDate(code, name, date string) (*IntradayData,
 // days: 最多加载的交易日数量
 // 加载结果存入 m.chartData（合并为单个 IntradayData）和 m.chartMultiDayDates
 func (m *Model) loadMultiDayChartData(days int) {
-	allPoints, dates, _, err := intraday.LoadMultiDay(m.chartViewStock, days)
+	allPoints, dates, pointsPerDay, err := intraday.LoadMultiDay(m.chartViewStock, days)
 	if err != nil || len(allPoints) == 0 {
 		m.chartLoadError = fmt.Errorf("no multi-day data available")
 		return
 	}
+
+	totalOriginal := len(allPoints)
 
 	// 降采样：多周期数据点可能数千个，降到合理数量以保证渲染性能
 	targetPoints := 300
@@ -170,13 +172,44 @@ func (m *Model) loadMultiDayChartData(days int) {
 		allPoints = sampledPoints
 	}
 
-	// 构建合并的 IntradayData
+	// 计算降采样后的日期边界索引（与 Downsample 索引公式对齐）
+	totalDownsampled := len(allPoints)
+	dayBounds := make([]int, len(pointsPerDay))
+	if totalDownsampled < totalOriginal && totalDownsampled > 1 {
+		// Downsample 公式: sourceIdx = int(i * step), step = (N-1)/(M-1)
+		// 逆映射: 第一个 i 使得 sourceIdx >= cumStart 即 i = ceil(cumStart / step)
+		step := float64(totalOriginal-1) / float64(totalDownsampled-1)
+		cumulative := 0
+		for i, count := range pointsPerDay {
+			if cumulative == 0 {
+				dayBounds[i] = 0
+			} else {
+				bound := int(math.Ceil(float64(cumulative) / step))
+				if bound >= totalDownsampled {
+					bound = totalDownsampled - 1
+				}
+				dayBounds[i] = bound
+			}
+			cumulative += count
+		}
+	} else {
+		// 未降采样：边界即累积偏移
+		cumulative := 0
+		for i, count := range pointsPerDay {
+			dayBounds[i] = cumulative
+			cumulative += count
+		}
+	}
+
+	// 构建合并的 IntradayData（必须包含 Market 以供渲染使用）
 	m.chartData = &IntradayData{
 		Code:       m.chartViewStock,
 		Name:       m.chartViewStockName,
+		Market:     string(api.GetMarketType(m.chartViewStock)),
 		Datapoints: allPoints,
 	}
 	m.chartMultiDayDates = dates
+	m.chartMultiDayBounds = dayBounds
 	m.chartLoadError = nil
 }
 
@@ -256,6 +289,16 @@ func calculateAdaptiveMargin(prices []float64) (float64, float64, float64) {
 // ============================================================================
 // 交易日计算
 // ============================================================================
+
+// getChartDisplayDate 选择 chart 展示日期（与 worker 采集日期解耦）
+// 使用 GetTradingDayForCollection 的多市场时区结果，出错时降级到 getSmartChartDate
+func getChartDisplayDate(stockCode string, m *Model) string {
+	date, _, err := GetTradingDayForCollection(stockCode, m)
+	if err != nil {
+		return getSmartChartDate()
+	}
+	return date
+}
 
 // getSmartChartDate 根据当前时间智能选择图表日期
 // 开盘前（< 9:30）：返回上一个交易日
@@ -447,35 +490,52 @@ func (m *Model) createIntradayChart(termWidth, termHeight int) *linechart.Model 
 		chartHeight = minHeight
 	}
 
-	// === 创建完整时间框架（根据市场配置动态生成） ===
-	timeFramework := m.createFixedTimeRange(m.chartData.Date, m.chartData.Market)
+	// === 准备数据点 ===
+	var dataPoints []float64
+	var timeLabels []string
 
-	// === 将实际数据填充到时间框架中 ===
-	dataMap := make(map[string]float64)
-	for _, dp := range m.chartData.Datapoints {
-		dataMap[dp.Time] = dp.Price
-	}
-
-	// 填充价格值（缺失数据用最后已知价格）
-	var lastKnownPrice float64
-	if len(m.chartData.Datapoints) > 0 {
-		lastKnownPrice = m.chartData.Datapoints[0].Price
-	}
-
-	// 准备数据点数组：索引 -> 价格
-	dataPoints := make([]float64, len(timeFramework))
-	timeLabels := make([]string, len(timeFramework)) // 索引 -> 时间标签
-
-	for i, tp := range timeFramework {
-		timeKey := tp.Time.Format("15:04")
-		timeLabels[i] = timeKey
-
-		if price, exists := dataMap[timeKey]; exists {
-			dataPoints[i] = price
-			lastKnownPrice = price
-		} else {
-			dataPoints[i] = lastKnownPrice
+	isMultiDay := m.chartPeriod != "" && m.chartPeriod != "1D"
+	if isMultiDay {
+		// 多日模式：降采样后的数据点使用合成时间 key，无法匹配单日时间框架，直接使用
+		dataPoints = make([]float64, len(m.chartData.Datapoints))
+		timeLabels = make([]string, len(m.chartData.Datapoints))
+		for i, dp := range m.chartData.Datapoints {
+			dataPoints[i] = dp.Price
+			timeLabels[i] = dp.Time
 		}
+	} else {
+		// 单日模式：创建完整时间框架并映射数据
+		timeFramework := m.createFixedTimeRange(m.chartData.Date, m.chartData.Market)
+
+		dataMap := make(map[string]float64)
+		for _, dp := range m.chartData.Datapoints {
+			dataMap[dp.Time] = dp.Price
+		}
+
+		var lastKnownPrice float64
+		if len(m.chartData.Datapoints) > 0 {
+			lastKnownPrice = m.chartData.Datapoints[0].Price
+		}
+
+		dataPoints = make([]float64, len(timeFramework))
+		timeLabels = make([]string, len(timeFramework))
+
+		for i, tp := range timeFramework {
+			timeKey := tp.Time.Format("15:04")
+			timeLabels[i] = timeKey
+
+			if price, exists := dataMap[timeKey]; exists {
+				dataPoints[i] = price
+				lastKnownPrice = price
+			} else {
+				dataPoints[i] = lastKnownPrice
+			}
+		}
+	}
+
+	if len(dataPoints) == 0 {
+		logDebug("log.chart.dataEmpty")
+		return nil
 	}
 
 	// === 智能计算Y轴范围 ===
@@ -536,55 +596,105 @@ func (m *Model) createIntradayChart(termWidth, termHeight int) *linechart.Model 
 	}
 
 	// === 创建自定义 X 轴标签格式化器 ===
-	// 只在4个关键时间点显示标签：开盘、午休、午盘、收盘
-	// 使用时间容差匹配，因为刻度位置可能不恰好落在关键时间点
-	xLabelFormatter := func(index int, value float64) string {
-		idx := int(math.Round(value))
-		if idx < 0 || idx >= len(timeLabels) {
+	var xLabelFormatter func(int, float64) string
+
+	if isMultiDay && len(m.chartMultiDayDates) > 0 {
+		// 多日模式：按各日实际数据点占比映射日期标签（MM/DD）
+		dates := m.chartMultiDayDates
+		bounds := m.chartMultiDayBounds
+		totalPoints := len(dataPoints)
+		xSteps := 8 // 与 WithXYSteps(8, 5) 保持一致
+		xLabelFormatter = func(index int, value float64) string {
+			idx := int(math.Round(value))
+			if idx < 0 || idx >= totalPoints {
+				return ""
+			}
+			// 用日期边界反查当前索引所属日期
+			dateIdx := 0
+			for i := len(bounds) - 1; i >= 0; i-- {
+				if idx >= bounds[i] {
+					dateIdx = i
+					break
+				}
+			}
+			if dateIdx >= len(dates) {
+				dateIdx = len(dates) - 1
+			}
+			// 无状态去重：基于 tick 间隔检测日期变化
+			// 用 index 参数计算前一 tick 的近似位置，判断是否跨越了日期边界
+			// 纯函数——不受 ntcharts 投机性调用影响
+			if index > 0 {
+				prevTickValue := float64(index-1) * float64(totalPoints-1) / float64(xSteps)
+				prevIdx := int(math.Round(prevTickValue))
+				if prevIdx < 0 {
+					prevIdx = 0
+				}
+				prevDateIdx := 0
+				for i := len(bounds) - 1; i >= 0; i-- {
+					if prevIdx >= bounds[i] {
+						prevDateIdx = i
+						break
+					}
+				}
+				if dateIdx == prevDateIdx {
+					return ""
+				}
+			}
+			date := dates[dateIdx]
+			if len(date) == 8 {
+				return date[4:6] + "/" + date[6:8]
+			}
+			return date
+		}
+	} else {
+		// 单日模式：只在关键时间点显示标签（开盘、午休、午盘、收盘）
+		// 使用时间容差匹配，因为刻度位置可能不恰好落在关键时间点
+		xLabelFormatter = func(index int, value float64) string {
+			idx := int(math.Round(value))
+			if idx < 0 || idx >= len(timeLabels) {
+				return ""
+			}
+
+			timeLabel := timeLabels[idx]
+
+			// 解析时间为分钟数
+			parts := strings.Split(timeLabel, ":")
+			if len(parts) != 2 {
+				return ""
+			}
+			hour, _ := strconv.Atoi(parts[0])
+			minute, _ := strconv.Atoi(parts[1])
+			totalMinutes := hour*60 + minute
+
+			// 关键时间点（以分钟表示）及容差
+			keyPoints := []struct {
+				minutes   int
+				label     string
+				tolerance int
+			}{
+				{540, "09:00", 8},  // 港股集合竞价开始
+				{555, "09:15", 8},  // A股集合竞价开始
+				{570, "09:30", 10}, // 09:30 ± 10分钟
+				{690, "11:30", 10}, // 11:30 ± 10分钟
+				{780, "13:00", 10}, // 13:00 ± 10分钟
+				{897, "14:57", 8},  // A股收盘竞价开始
+				{900, "15:00", 10}, // 15:00 ± 10分钟（与 14:57 不冲突）
+				{960, "16:00", 10}, // 港股/美股收盘
+			}
+
+			// 找到最接近的关键时间点
+			for _, kp := range keyPoints {
+				diff := totalMinutes - kp.minutes
+				if diff < 0 {
+					diff = -diff
+				}
+				if diff <= kp.tolerance {
+					return kp.label
+				}
+			}
+
 			return ""
 		}
-
-		timeLabel := timeLabels[idx]
-
-		// 解析时间为分钟数
-		parts := strings.Split(timeLabel, ":")
-		if len(parts) != 2 {
-			return ""
-		}
-		hour, _ := strconv.Atoi(parts[0])
-		minute, _ := strconv.Atoi(parts[1])
-		totalMinutes := hour*60 + minute
-
-		// 关键时间点（以分钟表示）及容差
-		// 09:30 = 570, 11:30 = 690, 13:00 = 780, 15:00 = 900
-		// 竞价时间点：A股 09:15 = 555, 港股 09:00 = 540
-		keyPoints := []struct {
-			minutes   int
-			label     string
-			tolerance int
-		}{
-			{540, "09:00", 8},  // 港股集合竞价开始
-			{555, "09:15", 8},  // A股集合竞价开始
-			{570, "09:30", 10}, // 09:30 ± 10分钟
-			{690, "11:30", 10}, // 11:30 ± 10分钟
-			{780, "13:00", 10}, // 13:00 ± 10分钟
-			{897, "14:57", 8},  // A股收盘竞价开始
-			{900, "15:00", 10}, // 15:00 ± 10分钟（与 14:57 不冲突）
-			{960, "16:00", 10}, // 港股/美股收盘
-		}
-
-		// 找到最接近的关键时间点
-		for _, kp := range keyPoints {
-			diff := totalMinutes - kp.minutes
-			if diff < 0 {
-				diff = -diff
-			}
-			if diff <= kp.tolerance {
-				return kp.label
-			}
-		}
-
-		return ""
 	}
 
 	// === 创建图表 ===
@@ -669,6 +779,7 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		// 切换到单日视图（默认模式）
 		m.chartPeriod = "1D"
 		m.chartMultiDayDates = nil
+		m.chartMultiDayBounds = nil
 		// 重新加载当日数据
 		data, err := m.loadIntradayDataForDate(m.chartViewStock, m.chartViewStockName, m.chartViewDate)
 		if err == nil {
@@ -859,8 +970,8 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 	// 图表标题：多周期模式显示数据范围，单日模式显示具体日期
 	var titleDateStr string
 	if m.chartPeriod != "" && m.chartPeriod != "1D" && len(m.chartMultiDayDates) >= 2 {
-		firstDate := m.chartMultiDayDates[len(m.chartMultiDayDates)-1] // 最旧的日期
-		lastDate := m.chartMultiDayDates[0]                            // 最新的日期
+		firstDate := m.chartMultiDayDates[0]                            // 最旧的日期（升序）
+		lastDate := m.chartMultiDayDates[len(m.chartMultiDayDates)-1] // 最新的日期（升序）
 		titleDateStr = fmt.Sprintf("[%s] %s ~ %s (%d天)",
 			m.chartPeriod,
 			formatDate(firstDate),
