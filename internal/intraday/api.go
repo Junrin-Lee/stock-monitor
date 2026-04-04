@@ -183,9 +183,13 @@ func tryGetIntradayFromSina(stockCode string) ([]IntradayDataPoint, error) {
 			continue
 		}
 
+		// Sina API 在 JSON 字段中直接提供 volume
+		vol, _ := strconv.ParseInt(item.Volume, 10, 64)
+
 		result = append(result, IntradayDataPoint{
-			Time:  timeStr,
-			Price: price,
+			Time:   timeStr,
+			Price:  price,
+			Volume: vol,
 		})
 	}
 
@@ -257,9 +261,16 @@ func tryGetIntradayFromEastMoney(stockCode string) ([]IntradayDataPoint, error) 
 			continue
 		}
 
+		// 提取 Volume（parts[2]，东方财富 API 的格式为 "时间,价格,成交量,..."）
+		var vol int64
+		if len(parts) >= 3 {
+			vol, _ = strconv.ParseInt(parts[2], 10, 64)
+		}
+
 		result = append(result, IntradayDataPoint{
-			Time:  timeStr,
-			Price: price,
+			Time:   timeStr,
+			Price:  price,
+			Volume: vol,
 		})
 	}
 
@@ -351,9 +362,16 @@ func tryGetIntradayFromTencent(stockCode string) ([]IntradayDataPoint, error) {
 				continue
 			}
 
+			// 提取 Volume（parts[2]，部分 API 可能没有此字段）
+			var vol int64
+			if len(parts) >= 3 {
+				vol, _ = strconv.ParseInt(parts[2], 10, 64)
+			}
+
 			result = append(result, IntradayDataPoint{
-				Time:  timeStr,
-				Price: price,
+				Time:   timeStr,
+				Price:  price,
+				Volume: vol,
 			})
 		}
 	}
@@ -368,9 +386,9 @@ func tryGetIntradayFromYahoo(stockCode string) ([]IntradayDataPoint, error) {
 	yahooSymbol := ConvertStockCodeForYahoo(stockCode)
 
 	// Build URL - Yahoo Finance chart API
-	// interval=1m (1 minute), range=1d (1 day)
+	// interval=1m (1 minute), range=1d (1 day), includePrePost=true 包含盘前盘后数据
 	url := fmt.Sprintf(
-		"https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1m&range=1d",
+		"https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1m&range=1d&includePrePost=true",
 		yahooSymbol,
 	)
 
@@ -401,7 +419,8 @@ func tryGetIntradayFromYahoo(stockCode string) ([]IntradayDataPoint, error) {
 				Timestamp  []int64 `json:"timestamp"` // Unix timestamps
 				Indicators struct {
 					Quote []struct {
-						Close []float64 `json:"close"` // Closing prices
+						Close  []float64 `json:"close"`  // Closing prices
+						Volume []int64   `json:"volume"` // 成交量（新增）
 					} `json:"quote"`
 				} `json:"indicators"`
 			} `json:"result"`
@@ -476,9 +495,16 @@ func tryGetIntradayFromYahoo(stockCode string) ([]IntradayDataPoint, error) {
 
 		timeStr := t.Format("15:04") // HH:MM format
 
+		// 提取当前时间点的成交量
+		var vol int64
+		if len(quotes[0].Volume) > i {
+			vol = quotes[0].Volume[i]
+		}
+
 		datapoints = append(datapoints, IntradayDataPoint{
-			Time:  timeStr,
-			Price: price,
+			Time:   timeStr,
+			Price:  price,
+			Volume: vol,
 		})
 	}
 

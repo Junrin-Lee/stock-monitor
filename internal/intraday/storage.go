@@ -155,7 +155,9 @@ func IsDataComplete(stockCode string, date string, marketType string, isLiveMode
 func GetExpectedDatapoints(marketType string, isLiveMode bool) int {
 	switch marketType {
 	case "china":
-		return 240 // 4小时 × 60分钟
+		// 09:15-09:25 开盘竞价 (10分) + 09:30-11:30 上午 (120分) + 13:00-14:57 下午 (117分) + 14:57-15:00 收盘竞价 (3分) = 250
+		// 注：收盘时间 15:00 本身含在下午交易，故总计 240 + 10 = 250
+		return 250
 
 	case "us":
 		return 390 // 6.5小时 × 60分钟

@@ -42,6 +42,7 @@ const (
 	TradingStatePostMarket                     // 盘后（收盘后，当日）
 	TradingStateWeekend                        // 周末
 	TradingStateHoliday                        // 假日
+	TradingStateAuction                        // 集合竞价（A股 09:15-09:25 / 港股 09:00-09:30）
 	TradingStateLunchBreak                     // 午休（A股、港股专用）
 )
 
@@ -58,6 +59,8 @@ func (t TradingState) String() string {
 		return "Weekend"
 	case TradingStateHoliday:
 		return "Holiday"
+	case TradingStateAuction:
+		return "Auction"
 	case TradingStateLunchBreak:
 		return "LunchBreak"
 	default:

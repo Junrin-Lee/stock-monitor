@@ -27,11 +27,16 @@ func GetTradingState(now time.Time, marketType string) types.TradingState {
 	var morningStart, morningEnd, afternoonStart, afternoonEnd time.Time
 
 	switch marketType {
-	case "china": // A股: 09:30-11:30, 13:00-15:00 CST
+	case "china": // A股: 09:30-11:30, 13:00-15:00 CST（含集合竞价 09:15-09:25 开盘，14:57-15:00 收盘）
+		auctionStart := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, now.Location())
 		morningStart = time.Date(now.Year(), now.Month(), now.Day(), 9, 30, 0, 0, now.Location())
 		morningEnd = time.Date(now.Year(), now.Month(), now.Day(), 11, 30, 0, 0, now.Location())
 		afternoonStart = time.Date(now.Year(), now.Month(), now.Day(), 13, 0, 0, 0, now.Location())
 		afternoonEnd = time.Date(now.Year(), now.Month(), now.Day(), 15, 0, 0, 0, now.Location())
+		// 竞价时段判断（在常规交易状态判断之前）
+		if now.After(auctionStart) && now.Before(morningStart) {
+			return types.TradingStateAuction
+		}
 
 	case "us": // 美股: 09:30-16:00 EST/EDT (无午休)
 		morningStart = time.Date(now.Year(), now.Month(), now.Day(), 9, 30, 0, 0, now.Location())
@@ -39,11 +44,16 @@ func GetTradingState(now time.Time, marketType string) types.TradingState {
 		morningEnd = afternoonEnd     // 无午休
 		afternoonStart = morningStart // 无午休
 
-	case "hongkong": // 港股: 09:30-12:00, 13:00-16:00 HKT
+	case "hongkong": // 港股: 09:30-12:00, 13:00-16:00 HKT（含集合竞价 09:00-09:30）
+		auctionStart := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, now.Location())
 		morningStart = time.Date(now.Year(), now.Month(), now.Day(), 9, 30, 0, 0, now.Location())
 		morningEnd = time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
 		afternoonStart = time.Date(now.Year(), now.Month(), now.Day(), 13, 0, 0, 0, now.Location())
 		afternoonEnd = time.Date(now.Year(), now.Month(), now.Day(), 16, 0, 0, 0, now.Location())
+		// 竞价时段判断
+		if now.After(auctionStart) && now.Before(morningStart) {
+			return types.TradingStateAuction
+		}
 
 	default:
 		return types.TradingStatePostMarket
@@ -129,8 +139,8 @@ func GetTradingDayForCollection(stockCode string, m ModelInterface) (string, typ
 	tradingState := GetTradingState(now, marketType)
 
 	switch tradingState {
-	case types.TradingStatePreMarket:
-		// 盘前 -> 获取上一个交易日的数据
+	case types.TradingStatePreMarket, types.TradingStateAuction:
+		// 盘前/集合竞价 -> 获取上一个交易日的数据
 		prevDate := FindPreviousTradingDay(stockCode, now.Format("20060102"), m)
 		return prevDate, types.CollectionModeHistorical, nil
 

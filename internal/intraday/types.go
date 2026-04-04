@@ -2,8 +2,9 @@ package intraday
 
 // IntradayDataPoint represents a single minute's price data
 type IntradayDataPoint struct {
-	Time  string  `json:"time"`  // Format: "09:31" (HH:MM)
-	Price float64 `json:"price"` // Closing price for that minute
+	Time   string  `json:"time"`             // Format: "09:31" (HH:MM)
+	Price  float64 `json:"price"`            // Closing price for that minute
+	Volume int64   `json:"volume,omitempty"` // 成交量（手）
 }
 
 // IntradayData represents the complete intraday data for a stock on a given day
