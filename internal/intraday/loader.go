@@ -57,31 +57,34 @@ func LoadLatestPrices(code string) []float64 {
 }
 
 // LoadMultiDay 加载最近 N 个交易日的分时数据并按时间顺序拼接
-// 返回：(拼接后的数据点切片, 实际加载的日期列表, 错误)
+// 返回：(拼接后的数据点切片, 实际加载的日期列表, 每日数据点数, 错误)
 // 实际加载天数可能少于 days（本地数据不足时）
-func LoadMultiDay(code string, days int) ([]IntradayDataPoint, []string, error) {
+func LoadMultiDay(code string, days int) ([]IntradayDataPoint, []string, []int, error) {
 	dates := findRecentIntradayDates(code, days)
 	if len(dates) == 0 {
-		return nil, nil, fmt.Errorf("no intraday data found for %s", code)
+		return nil, nil, nil, fmt.Errorf("no intraday data found for %s", code)
 	}
 
 	var allPoints []IntradayDataPoint
 	var loadedDates []string
+	var pointsPerDay []int
 
-	for _, date := range dates {
-		data, err := LoadSingleDay(code, date)
+	// 倒序遍历：dates 是降序（最新在前），倒序遍历使结果为升序（旧→新）
+	for i := len(dates) - 1; i >= 0; i-- {
+		data, err := LoadSingleDay(code, dates[i])
 		if err != nil {
 			continue
 		}
 		allPoints = append(allPoints, data.Datapoints...)
-		loadedDates = append(loadedDates, date)
+		loadedDates = append(loadedDates, dates[i])
+		pointsPerDay = append(pointsPerDay, len(data.Datapoints))
 	}
 
 	if len(allPoints) == 0 {
-		return nil, nil, fmt.Errorf("no datapoints loaded for %s", code)
+		return nil, nil, nil, fmt.Errorf("no datapoints loaded for %s", code)
 	}
 
-	return allPoints, loadedDates, nil
+	return allPoints, loadedDates, pointsPerDay, nil
 }
 
 // Downsample 将 prices 降采样到 targetWidth 个点（等距采样）

@@ -149,7 +149,7 @@ func (m *Model) loadIntradayDataForDate(code, name, date string) (*IntradayData,
 // days: 最多加载的交易日数量
 // 加载结果存入 m.chartData（合并为单个 IntradayData）和 m.chartMultiDayDates
 func (m *Model) loadMultiDayChartData(days int) {
-	allPoints, dates, err := intraday.LoadMultiDay(m.chartViewStock, days)
+	allPoints, dates, _, err := intraday.LoadMultiDay(m.chartViewStock, days)
 	if err != nil || len(allPoints) == 0 {
 		m.chartLoadError = fmt.Errorf("no multi-day data available")
 		return
