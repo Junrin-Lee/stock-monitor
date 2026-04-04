@@ -157,6 +157,7 @@ func RenderSectorStockList(
 	sortDir consts.SortDirection,
 	language consts.Language,
 	updateTime string,
+	sparklineFunc func(code string) string,
 ) string {
 	var sb strings.Builder
 
@@ -264,6 +265,13 @@ func RenderSectorStockList(
 
 		// 换手率
 		row = append(row, fmt.Sprintf("%.2f%%", stock.TurnoverRate))
+
+		// 走势
+		if sparklineFunc != nil {
+			row = append(row, sparklineFunc(stock.Code))
+		} else {
+			row = append(row, "─────────────")
+		}
 
 		t.AppendRow(row)
 		// 添加行分隔符（最后一行除外）

@@ -375,6 +375,7 @@ func (m *Model) viewSectorStockList() string {
 		m.sectorSortDirection,
 		m.language,
 		updateTime,
+		m.getSparklineForStock,
 	)
 }
 

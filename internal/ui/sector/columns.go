@@ -42,5 +42,6 @@ func GetSectorStockColumns() []SectorStockColumn {
 		{Header: "成交量", Width: 12, SortField: consts.SortByVolume},
 		{Header: "成交额", Width: 12, SortField: consts.SortBySectorTurnover},
 		{Header: "换手率", Width: 10, SortField: consts.SortByTurnoverRate},
+		{Header: "走势", Width: 14, SortField: -1},
 	}
 }
