@@ -52,12 +52,8 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Mark as search mode
 		m.isSearchMode = true
 
-		// Get smart date (current day or recent trading day)
-		actualDate, _, err := GetTradingDayForCollection(m.searchResult.Symbol, m)
-		if err != nil {
-			// Fallback to simple logic
-			actualDate = getSmartChartDate()
-		}
+		// 选择展示日期（与 worker 采集逻辑解耦，处理静默期等边缘情况）
+		actualDate := getChartDisplayDate(m.searchResult.Symbol, m)
 
 		// Set chart parameters
 		m.chartViewStock = m.searchResult.Symbol

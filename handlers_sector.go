@@ -185,11 +185,8 @@ func (m *Model) handleSectorStockList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.chartViewStock = selectedStock.Code
 			m.chartViewStockName = selectedStock.Name
 
-			// 获取交易日期
-			actualDate, _, err := GetTradingDayForCollection(selectedStock.Code, m)
-			if err != nil {
-				actualDate = getSmartChartDate()
-			}
+			// 选择展示日期（与 worker 采集逻辑解耦，处理静默期等边缘情况）
+			actualDate := getChartDisplayDate(selectedStock.Code, m)
 			m.chartViewDate = actualDate
 			m.previousState = consts.SectorStockList
 

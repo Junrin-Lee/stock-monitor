@@ -104,12 +104,8 @@ func (m *Model) handleMonitoringViews(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool)
 		m.chartViewStock = selectedStock.Code
 		m.chartViewStockName = selectedStock.Name
 
-		// Get smart date (consistent with worker logic)
-		actualDate, _, err := GetTradingDayForCollection(selectedStock.Code, m)
-		if err != nil {
-			// Fallback to simple logic
-			actualDate = getSmartChartDate()
-		}
+		// 选择展示日期（与 worker 采集逻辑解耦，处理静默期等边缘情况）
+		actualDate := getChartDisplayDate(selectedStock.Code, m)
 		m.chartViewDate = actualDate
 		m.previousState = consts.Monitoring
 
