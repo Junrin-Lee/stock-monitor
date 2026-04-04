@@ -1,12 +1,12 @@
 package main
 
 import (
-	"stock-monitor/internal/consts"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
 	"stock-monitor/internal/api"
+	"stock-monitor/internal/consts"
 	"stock-monitor/internal/intraday"
 	"strconv"
 	"strings"
@@ -37,6 +37,10 @@ func (m *Model) startIntradayDataCollection() {
 		}
 	} else if m.state == consts.WatchlistViewing {
 		for _, stock := range m.watchlist.Stocks {
+			stocksToTrack[stock.Code] = stock.Name
+		}
+	} else if m.state == consts.SectorStockList {
+		for _, stock := range m.sectorStocks {
 			stocksToTrack[stock.Code] = stock.Name
 		}
 	}
@@ -139,6 +143,41 @@ func (m *Model) loadIntradayDataForDate(code, name, date string) (*IntradayData,
 	}
 
 	return &data, nil
+}
+
+// loadMultiDayChartData 加载多日分时数据用于多周期图表
+// days: 最多加载的交易日数量
+// 加载结果存入 m.chartData（合并为单个 IntradayData）和 m.chartMultiDayDates
+func (m *Model) loadMultiDayChartData(days int) {
+	allPoints, dates, err := intraday.LoadMultiDay(m.chartViewStock, days)
+	if err != nil || len(allPoints) == 0 {
+		m.chartLoadError = fmt.Errorf("no multi-day data available")
+		return
+	}
+
+	// 降采样：多周期数据点可能数千个，降到合理数量以保证渲染性能
+	targetPoints := 300
+	if len(allPoints) > targetPoints {
+		prices := make([]float64, len(allPoints))
+		for i, dp := range allPoints {
+			prices[i] = dp.Price
+		}
+		sampled := intraday.Downsample(prices, targetPoints)
+		sampledPoints := make([]IntradayDataPoint, len(sampled))
+		for i, p := range sampled {
+			sampledPoints[i] = IntradayDataPoint{Price: p, Time: fmt.Sprintf("p%d", i)}
+		}
+		allPoints = sampledPoints
+	}
+
+	// 构建合并的 IntradayData
+	m.chartData = &IntradayData{
+		Code:       m.chartViewStock,
+		Name:       m.chartViewStockName,
+		Datapoints: allPoints,
+	}
+	m.chartMultiDayDates = dates
+	m.chartLoadError = nil
 }
 
 // parseIntradayTime 解析分时时间字符串 ("09:31") + 日期 ("20251130") → time.Time
@@ -518,15 +557,20 @@ func (m *Model) createIntradayChart(termWidth, termHeight int) *linechart.Model 
 
 		// 关键时间点（以分钟表示）及容差
 		// 09:30 = 570, 11:30 = 690, 13:00 = 780, 15:00 = 900
+		// 竞价时间点：A股 09:15 = 555, 港股 09:00 = 540
 		keyPoints := []struct {
 			minutes   int
 			label     string
 			tolerance int
 		}{
+			{540, "09:00", 8},  // 港股集合竞价开始
+			{555, "09:15", 8},  // A股集合竞价开始
 			{570, "09:30", 10}, // 09:30 ± 10分钟
 			{690, "11:30", 10}, // 11:30 ± 10分钟
 			{780, "13:00", 10}, // 13:00 ± 10分钟
-			{900, "15:00", 20}, // 15:00 ± 10分钟
+			{897, "14:57", 8},  // A股收盘竞价开始
+			{900, "15:00", 10}, // 15:00 ± 10分钟（与 14:57 不冲突）
+			{960, "16:00", 10}, // 港股/美股收盘
 		}
 
 		// 找到最接近的关键时间点
@@ -604,6 +648,7 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		// 返回上一个状态
 		m.state = m.previousState
 		m.chartData = nil
+		m.chartPeriod = "" // 重置周期
 
 		// 如果返回到 consts.Monitoring 或 consts.WatchlistViewing，需要重启定时器和数据更新
 		if m.previousState == consts.Monitoring || m.previousState == consts.WatchlistViewing {
@@ -618,6 +663,42 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			return m, tea.Batch(cmds...)
 		}
 
+		return m, nil
+
+	case "1":
+		// 切换到单日视图（默认模式）
+		m.chartPeriod = "1D"
+		m.chartMultiDayDates = nil
+		// 重新加载当日数据
+		data, err := m.loadIntradayDataForDate(m.chartViewStock, m.chartViewStockName, m.chartViewDate)
+		if err == nil {
+			m.chartData = data
+			m.chartLoadError = nil
+		}
+		return m, nil
+
+	case "5":
+		// 切换到 5 日视图
+		m.chartPeriod = "5D"
+		m.loadMultiDayChartData(5)
+		return m, nil
+
+	case "m":
+		// 切换到 1 月视图（约 22 个交易日）
+		m.chartPeriod = "1M"
+		m.loadMultiDayChartData(22)
+		return m, nil
+
+	case "3":
+		// 切换到 3 月视图（约 66 个交易日）
+		m.chartPeriod = "3M"
+		m.loadMultiDayChartData(66)
+		return m, nil
+
+	case "y":
+		// 切换到 1 年视图（约 252 个交易日）
+		m.chartPeriod = "1Y"
+		m.loadMultiDayChartData(252)
 		return m, nil
 
 	case "left":
@@ -775,6 +856,22 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 		}
 	}
 
+	// 图表标题：多周期模式显示数据范围，单日模式显示具体日期
+	var titleDateStr string
+	if m.chartPeriod != "" && m.chartPeriod != "1D" && len(m.chartMultiDayDates) >= 2 {
+		firstDate := m.chartMultiDayDates[len(m.chartMultiDayDates)-1] // 最旧的日期
+		lastDate := m.chartMultiDayDates[0]                            // 最新的日期
+		titleDateStr = fmt.Sprintf("[%s] %s ~ %s (%d天)",
+			m.chartPeriod,
+			formatDate(firstDate),
+			formatDate(lastDate),
+			len(m.chartMultiDayDates))
+	} else if m.chartPeriod != "" && m.chartPeriod != "1D" && len(m.chartMultiDayDates) == 1 {
+		titleDateStr = fmt.Sprintf("[%s] %s", m.chartPeriod, formatDate(m.chartMultiDayDates[0]))
+	} else {
+		titleDateStr = formatDate(m.chartViewDate)
+	}
+
 	b.WriteString(lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("14")). // 青色
@@ -783,7 +880,7 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 			marketLabel,
 			m.chartViewStock,
 			m.chartViewStockName,
-			formatDate(m.chartViewDate))))
+			titleDateStr)))
 	b.WriteString("\n\n")
 
 	// === 动态交易时段说明 ===
@@ -915,8 +1012,9 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 
 	// 底部操作提示
 	controls := fmt.Sprintf(
-		"[%s/%s] %s | [%s/%s] %s",
+		"[%s/%s] %s | [1/5/M/3/Y] %s | [%s/%s] %s",
 		"←", "→", m.getText("changeDate"),
+		"切换周期",
 		"ESC", "Q", m.getText("back"),
 	)
 	b.WriteString(lipgloss.NewStyle().

@@ -65,6 +65,13 @@ func TryYahooFinanceAPI(symbol string) *types.StockData {
 					RegularMarketDayHigh float64 `json:"regularMarketDayHigh"`
 					RegularMarketDayLow  float64 `json:"regularMarketDayLow"`
 					RegularMarketVolume  int64   `json:"regularMarketVolume"`
+					// 盘前盘后数据（非交易时段才有值）
+					PreMarketPrice          float64 `json:"preMarketPrice"`
+					PreMarketChange         float64 `json:"preMarketChange"`
+					PreMarketChangePercent  float64 `json:"preMarketChangePercent"`
+					PostMarketPrice         float64 `json:"postMarketPrice"`
+					PostMarketChange        float64 `json:"postMarketChange"`
+					PostMarketChangePercent float64 `json:"postMarketChangePercent"`
 				} `json:"meta"`
 				Indicators struct {
 					Quote []struct {
@@ -159,5 +166,12 @@ func TryYahooFinanceAPI(symbol string) *types.StockData {
 		PrevClose:     meta.ChartPreviousClose,
 		TurnoverRate:  0,
 		Volume:        volume,
+		// 盘前盘后数据（非交易时段才有值，交易时段为 0）
+		PreMarketPrice:    meta.PreMarketPrice,
+		PreMarketChange:   meta.PreMarketChange,
+		PreMarketPercent:  meta.PreMarketChangePercent,
+		PostMarketPrice:   meta.PostMarketPrice,
+		PostMarketChange:  meta.PostMarketChange,
+		PostMarketPercent: meta.PostMarketChangePercent,
 	}
 }

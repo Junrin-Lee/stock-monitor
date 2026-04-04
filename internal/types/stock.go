@@ -32,6 +32,13 @@ type StockData struct {
 	PrevClose     float64 `json:"prev_close"` // 昨日收盘价
 	TurnoverRate  float64 `json:"turnover_rate"`
 	Volume        int64   `json:"volume"`
+	// 美股盘前盘后数据（A股/港股为零值）
+	PreMarketPrice    float64 `json:"pre_market_price,omitempty"`
+	PreMarketChange   float64 `json:"pre_market_change,omitempty"`
+	PreMarketPercent  float64 `json:"pre_market_percent,omitempty"`
+	PostMarketPrice   float64 `json:"post_market_price,omitempty"`
+	PostMarketChange  float64 `json:"post_market_change,omitempty"`
+	PostMarketPercent float64 `json:"post_market_percent,omitempty"`
 }
 
 // Portfolio 持仓组合

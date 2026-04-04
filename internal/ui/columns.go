@@ -31,14 +31,19 @@ const (
 	ColTag      ColumnID = "tag"
 	ColTurnover ColumnID = "turnover"
 	ColVolume   ColumnID = "volume"
+
+	// 扩展列（Portfolio + Watchlist 均可用）
+	ColTrend      ColumnID = "trend"       // 走势迷你图（Sparkline）
+	ColPreMarket  ColumnID = "pre_market"  // 盘前价格（美股）
+	ColPostMarket ColumnID = "post_market" // 盘后价格（美股）
 )
 
 // ColumnMetadata - 列的元数据
 type ColumnMetadata struct {
-	ID         ColumnID             // 列ID
-	I18nKey    string               // 国际化翻译键
-	IsRequired bool                 // 是否为必须列（不可隐藏）
-	SortField  *consts.SortField    // 关联的排序字段（nil表示不可排序）
+	ID         ColumnID          // 列ID
+	I18nKey    string            // 国际化翻译键
+	IsRequired bool              // 是否为必须列（不可隐藏）
+	SortField  *consts.SortField // 关联的排序字段（nil表示不可排序）
 }
 
 // ColumnRegistry - 列注册表
@@ -156,6 +161,24 @@ func makePortfolioColumnRegistry() map[ColumnID]*ColumnMetadata {
 			IsRequired: false,
 			SortField:  &sortByMarketValue,
 		},
+		ColTrend: {
+			ID:         ColTrend,
+			I18nKey:    "col.trend",
+			IsRequired: false,
+			SortField:  nil, // 不可排序
+		},
+		ColPreMarket: {
+			ID:         ColPreMarket,
+			I18nKey:    "col.pre_market",
+			IsRequired: false,
+			SortField:  nil,
+		},
+		ColPostMarket: {
+			ID:         ColPostMarket,
+			I18nKey:    "col.post_market",
+			IsRequired: false,
+			SortField:  nil,
+		},
 	}
 }
 
@@ -242,6 +265,24 @@ func makeWatchlistColumnRegistry() map[ColumnID]*ColumnMetadata {
 			I18nKey:    "col.volume",
 			IsRequired: false,
 			SortField:  &sortByVolume,
+		},
+		ColTrend: {
+			ID:         ColTrend,
+			I18nKey:    "col.trend",
+			IsRequired: false,
+			SortField:  nil,
+		},
+		ColPreMarket: {
+			ID:         ColPreMarket,
+			I18nKey:    "col.pre_market",
+			IsRequired: false,
+			SortField:  nil,
+		},
+		ColPostMarket: {
+			ID:         ColPostMarket,
+			I18nKey:    "col.post_market",
+			IsRequired: false,
+			SortField:  nil,
 		},
 	}
 }

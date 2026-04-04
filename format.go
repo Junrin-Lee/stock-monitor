@@ -1,8 +1,14 @@
 package main
 
 import (
+	"fmt"
+	"strings"
+	"time"
+
 	"stock-monitor/internal/api"
+	"stock-monitor/internal/intraday"
 	"stock-monitor/internal/ui"
+	"stock-monitor/internal/ui/sparkline"
 )
 
 // ============================================================================
@@ -88,4 +94,60 @@ func (m *Model) formatStockNameWithPortfolioHighlight(name, code string) string 
 // abs 返回浮点数的绝对值
 func abs(x float64) float64 {
 	return ui.Abs(x)
+}
+
+// ============================================================================
+// Sparkline 趋势图
+// ============================================================================
+
+// getSparklineForStock 获取指定股票的 Sparkline 趋势图字符串（带缓存）
+// TTL 与 config.Update.RefreshInterval 对齐，保持价格和趋势图刷新频率一致
+func (m *Model) getSparklineForStock(code string) string {
+	ttl := time.Duration(m.config.Update.RefreshInterval) * time.Second
+	if m.sparklineCache != nil {
+		if cached, ok := m.sparklineCache[code]; ok {
+			if time.Since(m.sparklineCacheTime) < ttl {
+				return cached
+			}
+		}
+	}
+
+	prices := intraday.LoadLatestPrices(code)
+	if len(prices) < 3 {
+		return sparkline.Generate(nil, 12, "", "", "") // 返回占位符
+	}
+
+	isAShare := strings.HasPrefix(code, "SH") || strings.HasPrefix(code, "SZ")
+	result := sparkline.GenerateWithDefaults(prices, isAShare)
+
+	if m.sparklineCache == nil {
+		m.sparklineCache = make(map[string]string)
+	}
+	m.sparklineCache[code] = result
+	m.sparklineCacheTime = time.Now()
+
+	return result
+}
+
+// getStockPriceCacheEntry 从股价缓存中读取指定股票的 StockData（并发安全）
+func (m *Model) getStockPriceCacheEntry(code string) *StockData {
+	m.stockPriceMutex.RLock()
+	defer m.stockPriceMutex.RUnlock()
+	if entry, ok := m.stockPriceCache[code]; ok && entry != nil {
+		return entry.Data
+	}
+	return nil
+}
+
+// formatPrePostChange 格式化盘前/盘后价格（带颜色和涨跌幅）
+func (m *Model) formatPrePostChange(price, percent, prevClose float64) string {
+	formatter := ui.NewFormatter(m.language)
+	direction := ""
+	if price > prevClose {
+		direction = "+"
+	}
+	colorStr := formatter.FormatProfitRateWithColor(percent)
+	_ = colorStr
+	// 格式：价格 (+涨跌幅%)，颜色由 Formatter 决定
+	return formatter.FormatPriceWithColor(price, prevClose) + fmt.Sprintf(" %s%.2f%%", direction, percent)
 }

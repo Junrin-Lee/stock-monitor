@@ -242,6 +242,10 @@ type Model struct {
 	stockPriceMutex      sync.RWMutex                     // 股价数据读写锁
 	stockPriceUpdateTime time.Time                        // 上次更新股价数据的时间
 
+	// For sparkline cache - Sparkline 趋势图缓存
+	sparklineCache     map[string]string // code -> sparkline 字符串
+	sparklineCacheTime time.Time         // 上次全量刷新时间
+
 	// For intraday data collection - 分时数据采集
 	intradayManager *IntradayManager // 分时数据管理器
 
@@ -253,6 +257,8 @@ type Model struct {
 	chartLoadError        error         // 加载错误(如有)
 	chartIsCollecting     bool          // 是否正在自动采集数据
 	chartCollectStartTime time.Time     // 开始采集的时间
+	chartPeriod           string        // 图表周期: "1D"(默认), "5D", "1M", "3M", "1Y"
+	chartMultiDayDates    []string      // 多周期模式：实际加载的日期列表
 
 	// For search mode intraday - 搜索模式临时分时数据
 	isSearchMode           bool          // 是否处于搜索模式（用于区分数据来源）

@@ -425,6 +425,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.sectorSortDirection = consts.SortAsc
 				m.sortSectorStocks()
 			}
+			// 触发成分股分时数据采集，以填充走势图
+			m.startIntradayDataCollection()
 		} else if msg.Err != nil {
 			logError("获取成分股列表失败: %v", msg.Err)
 			m.message = fmt.Sprintf("获取成分股列表失败: %v", msg.Err)
@@ -750,6 +752,29 @@ func (m *Model) GeneratePortfolioRow(stock *Stock, rowIndex, startIndex, endInde
 		case ui.ColMarketValue:
 			marketValue := float64(stock.Quantity) * stock.Price
 			row[i] = fmt.Sprintf("%.2f", marketValue)
+		case ui.ColTrend:
+			row[i] = m.getSparklineForStock(stock.Code)
+		case ui.ColPreMarket:
+			if stock.Price > 0 {
+				// Portfolio 视图通过 stockPriceCache 获取盘前数据
+				if entry := m.getStockPriceCacheEntry(stock.Code); entry != nil && entry.PreMarketPrice > 0 {
+					row[i] = m.formatPrePostChange(entry.PreMarketPrice, entry.PreMarketPercent, stock.PrevClose)
+				} else {
+					row[i] = "-"
+				}
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColPostMarket:
+			if stock.Price > 0 {
+				if entry := m.getStockPriceCacheEntry(stock.Code); entry != nil && entry.PostMarketPrice > 0 {
+					row[i] = m.formatPrePostChange(entry.PostMarketPrice, entry.PostMarketPercent, stock.PrevClose)
+				} else {
+					row[i] = "-"
+				}
+			} else {
+				row[i] = "-"
+			}
 		default:
 			row[i] = "-"
 		}
@@ -848,6 +873,20 @@ func (m *Model) GenerateWatchlistRow(watchStock *WatchlistStock, stockData *Stoc
 		case ui.ColVolume:
 			if stockData != nil {
 				row[i] = formatVolume(stockData.Volume)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColTrend:
+			row[i] = m.getSparklineForStock(watchStock.Code)
+		case ui.ColPreMarket:
+			if stockData != nil && stockData.PreMarketPrice > 0 {
+				row[i] = m.formatPrePostChange(stockData.PreMarketPrice, stockData.PreMarketPercent, stockData.PrevClose)
+			} else {
+				row[i] = "-"
+			}
+		case ui.ColPostMarket:
+			if stockData != nil && stockData.PostMarketPrice > 0 {
+				row[i] = m.formatPrePostChange(stockData.PostMarketPrice, stockData.PostMarketPercent, stockData.PrevClose)
 			} else {
 				row[i] = "-"
 			}
