@@ -44,10 +44,10 @@ func LoadPortfolio() types.Portfolio {
 
 // WatchlistStockLegacy 旧版自选股数据结构（用于迁移兼容）
 type WatchlistStockLegacy struct {
-	Code   string          `json:"code"`
-	Name   string          `json:"name"`
-	Tag    string          `json:"tag,omitempty"`    // 旧格式的单个标签
-	Tags   []string        `json:"tags,omitempty"`   // 新格式的多个标签
+	Code   string           `json:"code"`
+	Name   string           `json:"name"`
+	Tag    string           `json:"tag,omitempty"`    // 旧格式的单个标签
+	Tags   []string         `json:"tags,omitempty"`   // 新格式的多个标签
 	Market types.MarketType `json:"market,omitempty"` // 市场类型
 }
 
@@ -269,6 +269,7 @@ func ValidatePortfolioColumns(configured []string) []string {
 		"open": true, "high": true, "low": true, "price": true,
 		"cost": true, "quantity": true, "today_change": true,
 		"position_profit": true, "profit_rate": true, "market_value": true,
+		"trend": true, "pre_market": true, "post_market": true,
 	}
 
 	return smartMergeRequiredColumns(configured, required, valid)
@@ -281,6 +282,7 @@ func ValidateWatchlistColumns(configured []string) []string {
 		"cursor": true, "tag": true, "code": true, "name": true,
 		"price": true, "prev_close": true, "open": true, "high": true,
 		"low": true, "today_change": true, "turnover": true, "volume": true,
+		"trend": true, "pre_market": true, "post_market": true,
 	}
 
 	return smartMergeRequiredColumns(configured, required, valid)

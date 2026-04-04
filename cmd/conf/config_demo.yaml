@@ -86,6 +86,20 @@ display:
     #   - position_profit: 持仓盈亏
     #   - profit_rate: 盈亏率
     #   - market_value: 市值
+    # 可选列 (Optional Columns) - 可以根据需要启用/禁用:
+    #   - prev_close: 昨收价
+    #   - open: 开盘价
+    #   - high: 最高价
+    #   - low: 最低价
+    #   - cost: 成本价
+    #   - quantity: 持股数
+    #   - today_change: 今日涨幅
+    #   - position_profit: 持仓盈亏
+    #   - profit_rate: 盈亏率
+    #   - market_value: 市值
+    #   - trend: 走势迷你图 (Sparkline)
+    #   - pre_market: 盘前价格 (美股)
+    #   - post_market: 盘后价格 (美股)
     portfolio_columns:
         - cursor         # 光标 (必须) | Cursor (required)
         - code           # 股票代码 (必须) | Stock Code (required)
@@ -101,6 +115,7 @@ display:
         - position_profit # 持仓盈亏 | Position P&L
         - profit_rate    # 盈亏率 | P&L Rate
         - market_value   # 市值 | Market Value
+        - trend          # 走势迷你图 | Trend Sparkline
 
     # 自选列表显示的列 Watchlist Columns
     # 按配置顺序显示，可以注释掉不需要的列
@@ -121,6 +136,9 @@ display:
     #   - today_change: 今日涨幅
     #   - turnover: 换手率
     #   - volume: 成交量
+    #   - trend: 走势迷你图 (Sparkline)
+    #   - pre_market: 盘前价格 (美股)
+    #   - post_market: 盘后价格 (美股)
     watchlist_columns:
         - cursor         # 光标 (必须) | Cursor (required)
         - tag            # 标签 (必须) | Tag (required)
@@ -134,6 +152,7 @@ display:
         - today_change   # 今日涨幅 | Today's Change %
         - turnover       # 换手率 | Turnover Rate
         - volume         # 成交量 | Volume
+        - trend          # 走势迷你图 | Trend Sparkline
 
     # 使用提示 Usage Tips:
     # 1. 列顺序：列按照配置文件中的顺序从左到右显示
@@ -178,16 +197,26 @@ markets:
         timezone: "Asia/Shanghai"
 
         # 交易时段 Trading Sessions
-        # A股有两个交易时段: 上午盘和下午盘
-        # A-shares have two trading sessions: morning and afternoon
+        # A股有两个交易时段: 上午盘和下午盘，以及集合竞价时段
+        # A-shares have two regular sessions plus auction periods
         trading_sessions:
+            # 开盘集合竞价 Opening Auction
+            - start_time: "09:15"  # 集合竞价开始 Auction start
+              end_time: "09:25"    # 集合竞价结束 Auction end
+              type: "auction"
+
             # 上午盘 Morning Session
             - start_time: "09:30"  # 开盘时间 Market open
               end_time: "11:30"    # 收盘时间 Market close
 
             # 下午盘 Afternoon Session
             - start_time: "13:00"  # 开盘时间 Market open
+              end_time: "14:57"    # 收盘前集合竞价开始前
+
+            # 收盘集合竞价 Closing Auction
+            - start_time: "14:57"  # 收盘竞价开始 Closing auction start
               end_time: "15:00"    # 收盘时间 Market close
+              type: "auction"
 
         # 交易日 Trading Weekdays
         # 1=周一 Monday, 2=周二 Tuesday, ..., 5=周五 Friday
@@ -224,9 +253,14 @@ markets:
         timezone: "Asia/Hong_Kong"
 
         # 交易时段 Trading Sessions
-        # 港股有两个交易时段: 上午盘和下午盘
-        # Hong Kong stocks have two trading sessions: morning and afternoon
+        # 港股有两个交易时段: 上午盘和下午盘，以及开盘集合竞价
+        # Hong Kong stocks have two trading sessions plus opening auction
         trading_sessions:
+            # 开盘集合竞价 Opening Auction (竞价时段 Pre-Market Auction)
+            - start_time: "09:00"  # 集合竞价开始 Auction start
+              end_time: "09:30"    # 集合竞价结束 Auction end
+              type: "auction"
+
             # 上午盘 Morning Session
             - start_time: "09:30"  # 开盘时间 Market open
               end_time: "12:00"    # 收盘时间 Market close (中午休市 Lunch break)
