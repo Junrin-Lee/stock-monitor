@@ -1,6 +1,6 @@
 # Stock Monitor
 
-[![Version](https://img.shields.io/badge/version-v8.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v9.0-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -179,7 +179,9 @@ Supported code formats:
 | **Portfolio Management** | Complete position management with add, edit, delete operations |
 | **Watchlist** | Independent stock watch list with multi-tag grouping and portfolio highlighting |
 | **Sector Market** 📊 | Browse sector performance (regional, industry, concept) with real-time data |
-| **Intraday Charts** | View intraday price charts in terminal using Braille character rendering |
+| **Sparkline Trends** 📈 | Inline Unicode mini-charts (▁▂▃▄▅▆▇█) showing price trends directly in tables |
+| **Pre/Post Market** 🌙 | Real-time pre-market and post-market prices for US stocks |
+| **Intraday Charts** | View intraday price charts in terminal, supports multi-period (5D/1M/3M/1Y) |
 | **Alert System** ⏰ | Price/change percent/volume alerts with 5 trigger frequencies, cross-platform notifications |
 | **Global Markets** | Support for A-shares, US stocks, Hong Kong stocks |
 | **Multi-language** | Complete Chinese and English bilingual interface |
@@ -265,6 +267,8 @@ More shortcuts: [⌨️ Keyboard Shortcuts](doc/guides/keyboard-shortcuts.md)
 
 ### 📋 Version History
 
+- [v9.0](doc/changelogs/v9.0.md) - Sparkline trends & extended market hours
+- [v8.1](doc/changelogs/v8.1.md) - Cross-platform release automation
 - [v8.0](doc/changelogs/v8.0.md) - Sector market view
 - [v7.1](doc/changelogs/v7.1.md) - Alert frequency editing
 - [v7.0](doc/changelogs/v7.0.md) - Architecture refactoring

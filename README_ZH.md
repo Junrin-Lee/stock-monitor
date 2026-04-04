@@ -1,6 +1,6 @@
 # Stock Monitor
 
-[![Version](https://img.shields.io/badge/version-v8.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v9.0-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -179,7 +179,9 @@ go build -o stock-monitor
 | **投资组合** | 完整的持仓管理,支持添加、修改、删除 |
 | **自选列表** | 独立的股票关注列表，支持多标签分组 |
 | **板块市场** 📊 | 浏览板块行情（地域、行业、概念）实时数据 |
-| **分时图表** | 终端内查看分时走势图，Braille 字符渲染 |
+| **走势迷你图** 📈 | 行内 Unicode 方块趋势图 (▁▂▃▄▅▆▇█)，直观展示价格走势 |
+| **盘前盘后** 🌙 | 美股盘前/盘后实时价格和涨跌幅显示 |
+| **分时图表** | 终端内查看分时走势图，支持多周期浏览 (5D/1M/3M/1Y) |
 | **告警系统** ⏰ | 价格/涨跌幅/成交量告警，5 种触发频率，跨平台通知 |
 | **全球市场** | 支持 A 股、美股、港股等主流市场 |
 | **多语言** | 完整的中英文双语界面支持 |
@@ -265,6 +267,8 @@ go build -o stock-monitor
 
 ### 📋 版本历史
 
+- [v9.0](doc/changelogs/v9.0.md) - Sparkline 走势图 + 盘前盘后行情
+- [v8.1](doc/changelogs/v8.1.md) - 跨平台发布自动化
 - [v8.0](doc/changelogs/v8.0.md) - 板块市场查看
 - [v7.1](doc/changelogs/v7.1.md) - 告警频率编辑
 - [v7.0](doc/changelogs/v7.0.md) - 架构重构、模块化
