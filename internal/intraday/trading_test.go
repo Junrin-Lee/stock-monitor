@@ -103,7 +103,9 @@ func TestGetTradingState_BoundaryConditions(t *testing.T) {
 		second    int
 		wantState types.TradingState
 	}{
-		{"开盘前一秒 09:29:59", 9, 29, 59, types.TradingStatePreMarket},
+		{"集合竞价中 09:20:00", 9, 20, 0, types.TradingStateAuction},
+		{"静默期 09:25:00", 9, 25, 0, types.TradingStatePreMarket},
+		{"静默期 09:29:59", 9, 29, 59, types.TradingStatePreMarket},
 		{"开盘整点 09:30:00", 9, 30, 0, types.TradingStateLive},
 		{"上午收盘前一秒 11:29:59", 11, 29, 59, types.TradingStateLive},
 		{"上午收盘整点 11:30:00", 11, 30, 0, types.TradingStateLunchBreak},

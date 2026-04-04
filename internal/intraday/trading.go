@@ -29,12 +29,13 @@ func GetTradingState(now time.Time, marketType string) types.TradingState {
 	switch marketType {
 	case "china": // A股: 09:30-11:30, 13:00-15:00 CST（含集合竞价 09:15-09:25 开盘，14:57-15:00 收盘）
 		auctionStart := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, now.Location())
+		auctionEnd := time.Date(now.Year(), now.Month(), now.Day(), 9, 25, 0, 0, now.Location()) // 09:25后为静默期
 		morningStart = time.Date(now.Year(), now.Month(), now.Day(), 9, 30, 0, 0, now.Location())
 		morningEnd = time.Date(now.Year(), now.Month(), now.Day(), 11, 30, 0, 0, now.Location())
 		afternoonStart = time.Date(now.Year(), now.Month(), now.Day(), 13, 0, 0, 0, now.Location())
 		afternoonEnd = time.Date(now.Year(), now.Month(), now.Day(), 15, 0, 0, 0, now.Location())
-		// 竞价时段判断（在常规交易状态判断之前）
-		if now.After(auctionStart) && now.Before(morningStart) {
+		// 竞价时段判断：09:15-09:25（含整点，09:25-09:30为静默期归入盘前）
+		if !now.Before(auctionStart) && now.Before(auctionEnd) {
 			return types.TradingStateAuction
 		}
 
@@ -50,8 +51,8 @@ func GetTradingState(now time.Time, marketType string) types.TradingState {
 		morningEnd = time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
 		afternoonStart = time.Date(now.Year(), now.Month(), now.Day(), 13, 0, 0, 0, now.Location())
 		afternoonEnd = time.Date(now.Year(), now.Month(), now.Day(), 16, 0, 0, 0, now.Location())
-		// 竞价时段判断
-		if now.After(auctionStart) && now.Before(morningStart) {
+		// 竞价时段判断（含整点）
+		if !now.Before(auctionStart) && now.Before(morningStart) {
 			return types.TradingStateAuction
 		}
 
@@ -139,10 +140,14 @@ func GetTradingDayForCollection(stockCode string, m ModelInterface) (string, typ
 	tradingState := GetTradingState(now, marketType)
 
 	switch tradingState {
-	case types.TradingStatePreMarket, types.TradingStateAuction:
-		// 盘前/集合竞价 -> 获取上一个交易日的数据
+	case types.TradingStatePreMarket:
+		// 盘前（含 A 股静默期 09:25-09:30）-> 获取上一个交易日的数据
 		prevDate := FindPreviousTradingDay(stockCode, now.Format("20060102"), m)
 		return prevDate, types.CollectionModeHistorical, nil
+
+	case types.TradingStateAuction:
+		// 集合竞价 -> 采集当日实时数据（竞价阶段已产生当日行情）
+		return now.Format("20060102"), types.CollectionModeLive, nil
 
 	case types.TradingStateLive:
 		// 交易中 -> 获取当日实时数据
