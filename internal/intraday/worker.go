@@ -111,15 +111,30 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 			}
 
 			// === 步骤 2: 获取并保存数据 ===
-			// 对于 Live 模式，检查市场是否开市
+			// 对于 Live 模式，检查市场是否开市（或处于集合竞价时段）
+			checkMarketHours := true
 			if mode == types.CollectionModeLive {
 				if !IsMarketOpen(stockCode, im.model) {
-					// 午休期间重置连续跳过计数，防止下午开盘后误触自动停止
+					// IsMarketOpen 不覆盖集合竞价窗口，需单独检查交易状态
 					marketType := string(api.GetMarketType(stockCode))
 					location, _ := GetMarketLocation(marketType)
+					allowCollection := false
 					if location != nil {
 						now := time.Now().In(location)
-						if GetTradingState(now, marketType) == types.TradingStateLunchBreak {
+						switch GetTradingState(now, marketType) {
+						case types.TradingStateAuction:
+							// 竞价时段：允许采集，且跳过 fetchAndSave 内部的市场检查
+							// 重置计数器防止竞价期间 API 空数据/重复快照触发 smart-stop
+							allowCollection = true
+							checkMarketHours = false
+							im.metadataMutex.Lock()
+							if meta, exists := im.workerMetadata[stockCode]; exists {
+								meta.ConsecutiveErrors = 0
+								meta.ConsecutiveSkips = 0
+							}
+							im.metadataMutex.Unlock()
+						case types.TradingStateLunchBreak:
+							// 午休期间重置连续跳过计数，防止下午开盘后误触自动停止
 							im.metadataMutex.Lock()
 							if meta, exists := im.workerMetadata[stockCode]; exists {
 								meta.ConsecutiveSkips = 0
@@ -127,15 +142,18 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 							im.metadataMutex.Unlock()
 						}
 					}
-					continue // 市场未开，跳过本次采集
+					if !allowCollection {
+						continue // 市场未开且非竞价，跳过本次采集
+					}
 				}
 			}
 
 			//获取 worker 槽位（限制并发数）
+			checkHours := checkMarketHours // 捕获到 goroutine 闭包
 			im.workerPool <- struct{}{}
 			go func() {
 				defer func() { <-im.workerPool }()
-				decision, err := im.fetchAndSaveIntradayData(stockCode, stockName, im.model, true, targetDate)
+				decision, err := im.fetchAndSaveIntradayData(stockCode, stockName, im.model, checkHours, targetDate)
 
 				// 更新元数据
 				im.metadataMutex.Lock()
