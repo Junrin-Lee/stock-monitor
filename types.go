@@ -243,8 +243,8 @@ type Model struct {
 	stockPriceUpdateTime time.Time                        // 上次更新股价数据的时间
 
 	// For sparkline cache - Sparkline 趋势图缓存
-	sparklineCache     map[string]string // code -> sparkline 字符串
-	sparklineCacheTime time.Time         // 上次全量刷新时间
+	sparklineCache     map[string]string    // code -> sparkline 字符串
+	sparklineCacheTime map[string]time.Time // code -> 上次刷新时间
 
 	// For intraday data collection - 分时数据采集
 	intradayManager *IntradayManager // 分时数据管理器

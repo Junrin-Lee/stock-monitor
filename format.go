@@ -106,7 +106,7 @@ func (m *Model) getSparklineForStock(code string) string {
 	ttl := time.Duration(m.config.Update.RefreshInterval) * time.Second
 	if m.sparklineCache != nil {
 		if cached, ok := m.sparklineCache[code]; ok {
-			if time.Since(m.sparklineCacheTime) < ttl {
+			if cacheTime, ok := m.sparklineCacheTime[code]; ok && time.Since(cacheTime) < ttl {
 				return cached
 			}
 		}
@@ -123,8 +123,11 @@ func (m *Model) getSparklineForStock(code string) string {
 	if m.sparklineCache == nil {
 		m.sparklineCache = make(map[string]string)
 	}
+	if m.sparklineCacheTime == nil {
+		m.sparklineCacheTime = make(map[string]time.Time)
+	}
 	m.sparklineCache[code] = result
-	m.sparklineCacheTime = time.Now()
+	m.sparklineCacheTime[code] = time.Now()
 
 	return result
 }
