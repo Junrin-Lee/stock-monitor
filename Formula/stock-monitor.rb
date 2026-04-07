@@ -5,30 +5,30 @@
 class StockMonitor < Formula
   desc "Professional TUI for real-time stock monitoring"
   homepage "https://github.com/Junrin-Lee/stock-monitor"
-  version "1.4.0"
+  version "1.5.0"
   license "MIT"
 
   on_macos do
-    url "https://github.com/Junrin-Lee/stock-monitor/releases/download/v1.4.0/stock-monitor_1.4.0_Darwin_universal.tar.gz"
-    sha256 "a996f150303e70a5d3acbd3e2033da7b27855259fb68a9511d57a79037eeb374"
+    url "https://github.com/Junrin-Lee/stock-monitor/releases/download/v1.5.0/stock-monitor_1.5.0_Darwin_universal.tar.gz"
+    sha256 "b4bfe069e03e23f6de3c5ce95546343ef5789d268105b89a88726fa2ba68fc44"
 
-    def install
+    define_method(:install) do
       bin.install "stock-monitor"
     end
   end
 
   on_linux do
     if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
-      url "https://github.com/Junrin-Lee/stock-monitor/releases/download/v1.4.0/stock-monitor_1.4.0_Linux_x86_64.tar.gz"
-      sha256 "926b3fe54e98c56867132e258c433268fa80ac645e43fe00843c670fe377aed5"
-      def install
+      url "https://github.com/Junrin-Lee/stock-monitor/releases/download/v1.5.0/stock-monitor_1.5.0_Linux_x86_64.tar.gz"
+      sha256 "8adb82aeec7406163044f5694d3390ecba57be6887161b7c87573ae5ee1f90cd"
+      define_method(:install) do
         bin.install "stock-monitor"
       end
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/Junrin-Lee/stock-monitor/releases/download/v1.4.0/stock-monitor_1.4.0_Linux_arm64.tar.gz"
-      sha256 "62e7e01f1c24b8b37905169cf15a55f65777bc94c440f1afbfc8b1542109fb37"
-      def install
+      url "https://github.com/Junrin-Lee/stock-monitor/releases/download/v1.5.0/stock-monitor_1.5.0_Linux_arm64.tar.gz"
+      sha256 "00451599d21da7330f9d7660aa043e4bf08114dae83479c5b10538f8f0f48099"
+      define_method(:install) do
         bin.install "stock-monitor"
       end
     end
