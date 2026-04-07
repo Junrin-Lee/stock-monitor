@@ -85,6 +85,7 @@ changelog:
       - '^docs:'
       - '^test:'
       - Merge pull request
+      - '^Brew formula update'
 
 release:
   draft: false
