@@ -174,14 +174,15 @@ func (w *HolidayWorker) fetchHolidayData() (*HolidayAPIResponse, error) {
 			w.logger.WarnDirect("Holiday worker HTTP error from %s: %v", url, err)
 			continue
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
 			w.logger.WarnDirect("Holiday worker HTTP %d from %s", resp.StatusCode, url)
 			continue
 		}
 
 		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			w.logger.WarnDirect("Holiday worker read error from %s: %v", url, err)
 			continue
@@ -307,7 +308,7 @@ func DiffCalendarData(old, new *CalendarData) int {
 	return changes
 }
 
-// SaveCalendarData 保存日历数据
+// SaveCalendarData 保存日历数据（原子写：temp+rename 防止截断）
 func SaveCalendarData(data *CalendarData, year int) error {
 	dir := filepath.Join(".", "data", "calendars", "CN")
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -320,7 +321,32 @@ func SaveCalendarData(data *CalendarData, year int) error {
 	}
 
 	filePath := filepath.Join(dir, fmt.Sprintf("%d.json", year))
-	return os.WriteFile(filePath, jsonData, 0644)
+
+	tmp, err := os.CreateTemp(dir, fmt.Sprintf("%d.json.tmp.*", year))
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+
+	if _, err := tmp.Write(jsonData); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("sync temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename temp to target: %w", err)
+	}
+	return nil
 }
 
 // IsHoliday 检查指定日期是否为节假日
