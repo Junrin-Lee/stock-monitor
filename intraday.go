@@ -44,7 +44,10 @@ func (a *modelAdapter) GetConfig() interface{} {
 }
 
 func (a *modelAdapter) GetStockPriceCache() map[string]interface{} {
-	// Convert map[string]*StockPriceCacheEntry to map[string]interface{}
+	// 持锁遍历 map，防止 concurrent map iteration and map write 崩溃
+	a.model.stockPriceMutex.RLock()
+	defer a.model.stockPriceMutex.RUnlock()
+
 	result := make(map[string]interface{}, len(a.model.stockPriceCache))
 	for k, v := range a.model.stockPriceCache {
 		result[k] = &cacheEntryAdapter{entry: v}

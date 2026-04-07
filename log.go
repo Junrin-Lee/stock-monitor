@@ -52,10 +52,10 @@ func InitLogger(logDir string, level LogLevel) error {
 		return err
 	}
 
-	// 设置 i18n 文本获取器（从 globalModel 获取）
+	// 设置 i18n 文本获取器（从 globalModel 获取，使用 atomic 读取保证并发安全）
 	log.SetTextGetter(func(key string) string {
-		if globalModel != nil {
-			return globalModel.getText(key)
+		if m := globalModel.Load(); m != nil {
+			return m.getText(key)
 		}
 		return key
 	})
@@ -134,8 +134,8 @@ func logErrorDirect(format string, args ...any) {
 
 // getLogText 获取 i18n 日志文本（向后兼容）
 func getLogText(key string) string {
-	if globalModel != nil {
-		return globalModel.getText(key)
+	if m := globalModel.Load(); m != nil {
+		return m.getText(key)
 	}
 	return key
 }

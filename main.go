@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"stock-monitor/internal/app"
@@ -30,7 +31,8 @@ var (
 )
 
 // globalModel 全局模型引用，用于日志记录的 i18n 支持
-var globalModel *Model
+// 使用 atomic.Pointer 保证后台 goroutine 读取与主线程写入的并发安全
+var globalModel atomic.Pointer[Model]
 
 // convertStockData converts types.StockData to main.StockData
 func convertStockData(data *types.StockData) *StockData {
@@ -166,7 +168,7 @@ func main() {
 	m.menuItems = getMenuItems(m.language)
 
 	// 设置全局模型引用用于调试日志
-	globalModel = &m
+	globalModel.Store(&m)
 
 	p := tea.NewProgram(&m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
@@ -443,7 +445,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// 更新全局模型引用以保持调试日志同步
 	if newModel != nil {
 		if modelPtr, ok := newModel.(*Model); ok {
-			globalModel = modelPtr
+			globalModel.Store(modelPtr)
 		}
 	}
 
@@ -645,8 +647,10 @@ func (m *Model) GetConfig() interface{} {
 	return m.config
 }
 
-// GetStockPriceCache returns the stock price cache
+// GetStockPriceCache returns the stock price cache (线程安全版本)
 func (m *Model) GetStockPriceCache() map[string]interface{} {
+	m.stockPriceMutex.RLock()
+	defer m.stockPriceMutex.RUnlock()
 	cache := make(map[string]interface{})
 	for k, v := range m.stockPriceCache {
 		cache[k] = v
