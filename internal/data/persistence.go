@@ -2,7 +2,9 @@ package data
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 
@@ -10,17 +12,51 @@ import (
 	"stock-monitor/internal/types"
 )
 
+// atomicWriteFile 原子写文件：先写临时文件再 rename，防止中途崩溃导致数据截断
+func atomicWriteFile(filePath string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(filePath)
+	tmp, err := os.CreateTemp(dir, filepath.Base(filePath)+".tmp.*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("sync temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename temp to target: %w", err)
+	}
+	return nil
+}
+
 // ============================================================================
 // Portfolio 持仓数据持久化
 // ============================================================================
 
-// SavePortfolio 保存持仓数据到文件
+// SavePortfolio 保存持仓数据到文件（原子写）
 func SavePortfolio(portfolio types.Portfolio) error {
 	data, err := json.MarshalIndent(portfolio, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(consts.DataFile, data, 0644)
+	return atomicWriteFile(consts.DataFile, data, 0644)
 }
 
 // LoadPortfolio 从文件加载持仓数据
@@ -122,13 +158,13 @@ func LoadWatchlist(marketDetector MarketDetector, marketTagChecker MarketTagChec
 	return watchlist
 }
 
-// SaveWatchlist 保存自选股票列表
+// SaveWatchlist 保存自选股票列表（原子写）
 func SaveWatchlist(watchlist types.Watchlist) error {
 	data, err := json.MarshalIndent(watchlist, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(consts.WatchlistFile, data, 0644)
+	return atomicWriteFile(consts.WatchlistFile, data, 0644)
 }
 
 // ============================================================================
@@ -211,7 +247,10 @@ func LoadConfig() types.Config {
 	if err != nil {
 		// 如果配置文件不存在，创建默认配置文件
 		config := GetDefaultConfig()
-		SaveConfig(config)
+		if saveErr := SaveConfig(config); saveErr != nil {
+			// 首次运行配置创建失败仅记日志，不阻塞启动
+			fmt.Fprintf(os.Stderr, "Warning: failed to save default config: %v\n", saveErr)
+		}
 		return config
 	}
 
@@ -252,13 +291,13 @@ func LoadConfig() types.Config {
 	return config
 }
 
-// SaveConfig 保存配置文件
+// SaveConfig 保存配置文件（原子写）
 func SaveConfig(config types.Config) error {
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(consts.ConfigFile, data, 0644)
+	return atomicWriteFile(consts.ConfigFile, data, 0644)
 }
 
 // ValidatePortfolioColumns 验证Portfolio列配置
@@ -403,12 +442,12 @@ func LoadAlertData() types.AlertData {
 	return alertData
 }
 
-// SaveAlertData 保存告警数据到文件
+// SaveAlertData 保存告警数据到文件（原子写）
 func SaveAlertData(alertData types.AlertData) error {
 	alertData.AlertCount = len(alertData.Alerts)
 	data, err := json.MarshalIndent(alertData, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(consts.AlertFile, data, 0644)
+	return atomicWriteFile(consts.AlertFile, data, 0644)
 }

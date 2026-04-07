@@ -12,11 +12,12 @@ import (
 
 // savePortfolio 保存持仓数据到文件（使用 internal/data）
 func (m *Model) savePortfolio() {
-	// 转换为 types.Portfolio
 	portfolio := types.Portfolio{
 		Stocks: convertStocksToTypes(m.portfolio.Stocks),
 	}
-	data.SavePortfolio(portfolio)
+	if err := data.SavePortfolio(portfolio); err != nil {
+		logErrorDirect("Failed to save portfolio: %v", err)
+	}
 }
 
 // loadPortfolio 从文件加载持仓数据（使用 internal/data）
@@ -86,7 +87,9 @@ func (m *Model) saveWatchlist() {
 	watchlist := types.Watchlist{
 		Stocks: convertWatchlistStocksToTypes(m.watchlist.Stocks),
 	}
-	data.SaveWatchlist(watchlist)
+	if err := data.SaveWatchlist(watchlist); err != nil {
+		logErrorDirect("Failed to save watchlist: %v", err)
+	}
 }
 
 // convertWatchlistStocksToTypes 将 main.WatchlistStock 转换为 types.WatchlistStock

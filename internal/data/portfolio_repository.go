@@ -74,14 +74,28 @@ func (r *PortfolioRepository) Save(stocks []*types.Stock) error {
 		return fmt.Errorf("failed to marshal portfolio: %w", err)
 	}
 
-	// 原子写入（先写临时文件，再重命名）
+	// 原子写入（temp → sync → close → rename）
 	tmpPath := r.filePath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create temp portfolio file: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to write portfolio file: %w", err)
 	}
-
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to sync portfolio file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to close portfolio file: %w", err)
+	}
 	if err := os.Rename(tmpPath, r.filePath); err != nil {
-		os.Remove(tmpPath) // 清理临时文件
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to rename portfolio file: %w", err)
 	}
 
