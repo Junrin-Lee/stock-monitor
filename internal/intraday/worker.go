@@ -13,10 +13,7 @@ import (
 // targetDate: 目标日期 (YYYYMMDD)
 // mode: 采集模式 (Historical/Live)
 func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate string, mode types.CollectionMode) {
-	// 标记 worker 为活动状态
-	im.mu.Lock()
-	im.activeStocks[stockCode] = true
-	im.mu.Unlock()
+	// 注：activeStocks[stockCode] = true 已在 StartCollection 中设置，此处无需重复
 
 	// 清理函数
 	defer func() {
@@ -58,8 +55,14 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 		select {
 		case <-ticker.C:
 			// === 步骤 1: 检查自动停止条件（在 fetch 前检查，避免读取旧数据） ===
+			// 在锁内复制需要的值，防止与写入 goroutine 竞态
 			im.metadataMutex.RLock()
 			meta, exists := im.workerMetadata[stockCode]
+			var consecutiveErrors, consecutiveSkips int
+			if exists {
+				consecutiveErrors = meta.ConsecutiveErrors
+				consecutiveSkips = meta.ConsecutiveSkips
+			}
 			im.metadataMutex.RUnlock()
 
 			if !exists {
@@ -67,16 +70,16 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 			}
 
 			// 条件 1: 连续错误过多
-			if meta.ConsecutiveErrors >= maxConsecutiveErrors {
+			if consecutiveErrors >= maxConsecutiveErrors {
 				logInfoDirect("[Intraday] Worker for %s stopped: %d consecutive errors",
-					stockCode, meta.ConsecutiveErrors)
+					stockCode, consecutiveErrors)
 				return
 			}
 
 			// 条件 2: 连续 Skip 次数过多（数据完全一致）
 			maxConsecutiveSkips := 3 // 连续 3 次数据完全一致即停止
-			if meta.ConsecutiveSkips >= maxConsecutiveSkips {
-				logDebug("log.intraday.consecutiveSkips", stockCode, meta.ConsecutiveSkips)
+			if consecutiveSkips >= maxConsecutiveSkips {
+				logDebug("log.intraday.consecutiveSkips", stockCode, consecutiveSkips)
 				logDebug("log.intraday.stopDataStable", stockCode)
 				return
 			}

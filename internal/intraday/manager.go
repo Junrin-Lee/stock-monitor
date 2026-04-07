@@ -60,13 +60,14 @@ func (im *IntradayManager) StartCollection(stockCode, stockName string) error {
 		return nil
 	}
 
-	// 步骤 3: 检查是否已有 worker 在运行
+	// 步骤 3: 检查是否已有 worker 在运行，同时标记为活动（原子操作防止 TOCTOU）
 	im.mu.Lock()
 	if im.activeStocks[stockCode] {
 		im.mu.Unlock()
 		logInfoDirect("[Intraday] Worker already running for %s", stockCode)
 		return nil
 	}
+	im.activeStocks[stockCode] = true
 	im.mu.Unlock()
 
 	// 步骤 4: 初始化 worker 元数据

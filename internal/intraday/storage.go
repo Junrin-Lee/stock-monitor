@@ -23,12 +23,26 @@ func SaveIntradayData(filePath string, data *IntradayData) error {
 		return err
 	}
 
-	// Atomic write: write to temp file, then rename
+	// Atomic write: temp → sync → close → rename
 	tempPath := filePath + ".tmp"
-	if err := os.WriteFile(tempPath, jsonData, 0644); err != nil {
+	f, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
 		return err
 	}
-
+	if _, err := f.Write(jsonData); err != nil {
+		f.Close()
+		os.Remove(tempPath)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tempPath)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tempPath)
+		return err
+	}
 	return os.Rename(tempPath, filePath)
 }
 
@@ -96,9 +110,8 @@ func fileExists(path string) bool {
 // isLiveMode: 是否为实时模式（实时模式使用较低的完整性阈值）
 // 返回: (是否完整, 错误)
 func IsDataComplete(stockCode string, date string, marketType string, isLiveMode bool) (bool, error) {
-	// 构造文件路径
-	market := getMarketDirectory(stockCode) // 返回 "CN", "US", 或 "HK"
-	filePath := filepath.Join("data", "intraday", market, stockCode, date+".json")
+	// 使用 GetIntradayFilePath 兼容新旧目录结构
+	filePath := GetIntradayFilePath(stockCode, date)
 
 	// 检查文件是否存在
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {

@@ -181,7 +181,11 @@ func (im *IntradayManager) fetchAndSaveIntradayData(stockCode, stockName string,
 	if fileExists(filePath) {
 		data, err := os.ReadFile(filePath)
 		if err == nil {
-			json.Unmarshal(data, existingData)
+			if unmarshalErr := json.Unmarshal(data, existingData); unmarshalErr != nil {
+				logDebug("log.intraday.unmarshalFail", stockCode, unmarshalErr)
+				// 文件损坏时重置为空数据，而非静默使用零值覆盖
+				existingData.Datapoints = []IntradayDataPoint{}
+			}
 		}
 	}
 
