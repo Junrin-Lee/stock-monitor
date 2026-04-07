@@ -1,20 +1,39 @@
 # Stock Monitor - Makefile
 # 提供便捷的测试和构建命令
 
-.PHONY: help test test-verbose test-coverage test-race test-bench clean build run
+.PHONY: help test test-v test-coverage test-race test-bench test-api test-data test-market test-quick test-stats clean build run deps fmt vet check release-check release-snapshot release-dry-run
 
 # 默认目标 - 显示帮助信息
 help:
 	@echo "Stock Monitor - 可用命令:"
 	@echo ""
-	@echo "  make test          - 运行所有单元测试"
-	@echo "  make test-v        - 运行测试(详细输出)"
-	@echo "  make test-coverage - 运行测试并生成覆盖率报告"
-	@echo "  make test-race     - 运行测试(带并发竞争检测)"
-	@echo "  make test-bench    - 运行性能基准测试"
-	@echo "  make clean         - 清理测试缓存和临时文件"
-	@echo "  make build         - 编译项目"
-	@echo "  make run           - 运行程序"
+	@echo "  测试:"
+	@echo "    make test             - 运行所有单元测试"
+	@echo "    make test-v           - 运行测试(详细输出)"
+	@echo "    make test-coverage    - 运行测试并生成覆盖率报告"
+	@echo "    make test-race        - 运行测试(带并发竞争检测)"
+	@echo "    make test-bench       - 运行性能基准测试"
+	@echo "    make test-quick       - 快速测试(跳过长时间测试)"
+	@echo "    make test-api         - 测试 API 包"
+	@echo "    make test-data        - 测试 Data 包"
+	@echo "    make test-market      - 测试 Market 包"
+	@echo "    make test-stats       - 查看测试统计信息"
+	@echo ""
+	@echo "  构建与运行:"
+	@echo "    make build            - 编译项目"
+	@echo "    make run              - 运行程序"
+	@echo "    make clean            - 清理测试缓存和临时文件"
+	@echo ""
+	@echo "  代码质量:"
+	@echo "    make fmt              - 格式化代码"
+	@echo "    make vet              - 代码静态检查"
+	@echo "    make check            - 完整检查(格式化+静态检查+测试)"
+	@echo "    make deps             - 安装/更新项目依赖"
+	@echo ""
+	@echo "  发布:"
+	@echo "    make release-check    - 检查 GoReleaser 配置"
+	@echo "    make release-snapshot - 构建快照版本(不发布)"
+	@echo "    make release-dry-run  - 模拟发布流程(不发布)"
 	@echo ""
 
 # 运行所有单元测试
@@ -118,8 +137,6 @@ test-stats:
 	@echo ""
 
 # Release management
-.PHONY: release-check release-snapshot release-dry-run
-
 release-check:  ## Check GoReleaser configuration
 	@echo "🔍 Checking GoReleaser configuration..."
 	@goreleaser check
