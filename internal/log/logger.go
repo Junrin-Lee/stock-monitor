@@ -31,11 +31,12 @@ const (
 
 // Logger 封装 zap logger，支持按天自动轮转
 type Logger struct {
-	mu         sync.Mutex  // 保护 zap 实例和 currentDay 的并发访问
-	zap        *zap.Logger // zap logger 实例
-	currentDay string      // 当前日志文件对应的日期 (YYYY-MM-DD)
-	logDir     string      // 日志目录路径
-	level      LogLevel    // 最低日志级别
+	mu         sync.RWMutex // 保护 zap 实例和 currentDay 的并发访问（RWMutex 允许并发读日志）
+	zap        *zap.Logger  // zap logger 实例
+	file       *os.File     // 当前日志文件句柄（用于轮转时关闭，防止 FD 泄漏）
+	currentDay string       // 当前日志文件对应的日期 (YYYY-MM-DD)
+	logDir     string       // 日志目录路径
+	level      LogLevel     // 最低日志级别
 }
 
 var globalLogger *Logger
@@ -78,23 +79,30 @@ func InitLogger(logDir string, level LogLevel) error {
 func (l *Logger) rotateIfNeeded() error {
 	today := time.Now().Format("2006-01-02")
 
-	// 快速路径：如果是同一天且 logger 已存在，无需轮转
+	// 快速路径：持 RLock 检查，允许并发读
+	l.mu.RLock()
 	if l.currentDay == today && l.zap != nil {
+		l.mu.RUnlock()
 		return nil
 	}
+	l.mu.RUnlock()
 
-	// 双重检查锁（DCL）：防止并发轮转
+	// 慢路径：持写锁执行轮转
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	// 再次检查（可能其他 goroutine 已完成轮转）
+	// 双重检查（可能其他 goroutine 已完成轮转）
 	if l.currentDay == today && l.zap != nil {
 		return nil
 	}
 
-	// 关闭旧 logger（刷新缓冲区）
+	// 关闭旧 logger（刷新缓冲区）并关闭旧文件句柄防止 FD 泄漏
 	if l.zap != nil {
 		l.zap.Sync()
+	}
+	if l.file != nil {
+		l.file.Close()
+		l.file = nil
 	}
 
 	// 创建新日志文件
@@ -122,8 +130,9 @@ func (l *Logger) rotateIfNeeded() error {
 		levelToZapLevel(l.level),
 	)
 
-	// 创建新 logger
+	// 创建新 logger 并保存文件句柄
 	l.zap = zap.New(core)
+	l.file = file
 	l.currentDay = today
 
 	return nil
@@ -171,6 +180,14 @@ func (l *Logger) Log(level LogLevel, pathKey string, message string) {
 	// 每次写日志前检查是否需要轮转（跨天时自动切换文件）
 	l.rotateIfNeeded()
 
+	// 持 RLock 直到写完日志，防止轮转关闭底层文件导致写入失败
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	if l.zap == nil {
+		return
+	}
+
 	// 格式: [pathKey][message] 或 [message]（如果 pathKey 为空）
 	var formatted string
 	if pathKey != "" {
@@ -193,6 +210,8 @@ func (l *Logger) Log(level LogLevel, pathKey string, message string) {
 
 // Sync 刷新缓冲区（应用退出时调用）
 func (l *Logger) Sync() {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	if l.zap != nil {
 		l.zap.Sync()
 	}
