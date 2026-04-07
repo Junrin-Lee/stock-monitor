@@ -266,6 +266,7 @@ type Model struct {
 	searchIntradayData     *IntradayData // 搜索模式的临时分时数据(仅内存)
 	searchIntradayWorker   chan struct{} // 临时 worker 停止信号
 	searchIntradayUpdateCh chan struct{} // 数据更新通知 channel
+	searchIntradayMu       sync.RWMutex // 保护 searchIntradayUpdateCh 和 searchIntradayData 的并发访问
 
 	// For alert management - 告警管理相关字段
 	alertData              AlertData        // 告警数据

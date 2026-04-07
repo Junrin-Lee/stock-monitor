@@ -447,8 +447,12 @@ func (m *Model) viewSearchResultWithActions() string {
 			s += "📈 Real-time Intraday Chart (Auto-refresh every 5s)\n\n"
 		}
 
-		// Render chart
-		if m.searchIntradayData != nil && len(m.searchIntradayData.Datapoints) > 0 {
+		// Render chart（快照捕获防止与 worker 竞态）
+		m.searchIntradayMu.RLock()
+		viewSearchData := m.searchIntradayData
+		m.searchIntradayMu.RUnlock()
+
+		if viewSearchData != nil && len(viewSearchData.Datapoints) > 0 {
 			// Create chart (use smaller embedded size)
 			chartWidth := 100  // Embedded chart width
 			chartHeight := 15  // Embedded chart height
@@ -460,12 +464,12 @@ func (m *Model) viewSearchResultWithActions() string {
 				// Display update info
 				if m.language == consts.Chinese {
 					s += fmt.Sprintf("最后更新: %s | 数据点: %d\n",
-						m.searchIntradayData.UpdatedAt,
-						len(m.searchIntradayData.Datapoints))
+						viewSearchData.UpdatedAt,
+						len(viewSearchData.Datapoints))
 				} else {
 					s += fmt.Sprintf("Last update: %s | Data points: %d\n",
-						m.searchIntradayData.UpdatedAt,
-						len(m.searchIntradayData.Datapoints))
+						viewSearchData.UpdatedAt,
+						len(viewSearchData.Datapoints))
 				}
 			} else {
 				// Chart creation failed (terminal too small)
@@ -655,8 +659,12 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 			s += "📈 Real-time Intraday Chart (Auto-refresh every 5s)\n\n"
 		}
 
-		// Render chart
-		if m.searchIntradayData != nil && len(m.searchIntradayData.Datapoints) > 0 {
+		// Render chart（快照捕获防止与 worker 竞态）
+		m.searchIntradayMu.RLock()
+		viewSearchData := m.searchIntradayData
+		m.searchIntradayMu.RUnlock()
+
+		if viewSearchData != nil && len(viewSearchData.Datapoints) > 0 {
 			// Create chart (use smaller embedded size)
 			chartWidth := 100  // Embedded chart width
 			chartHeight := 15  // Embedded chart height
@@ -668,12 +676,12 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 				// Display update info
 				if m.language == consts.Chinese {
 					s += fmt.Sprintf("最后更新: %s | 数据点: %d\n",
-						m.searchIntradayData.UpdatedAt,
-						len(m.searchIntradayData.Datapoints))
+						viewSearchData.UpdatedAt,
+						len(viewSearchData.Datapoints))
 				} else {
 					s += fmt.Sprintf("Last update: %s | Data points: %d\n",
-						m.searchIntradayData.UpdatedAt,
-						len(m.searchIntradayData.Datapoints))
+						viewSearchData.UpdatedAt,
+						len(viewSearchData.Datapoints))
 				}
 			} else {
 				// Chart creation failed (terminal too small)

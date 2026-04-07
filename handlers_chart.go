@@ -1151,30 +1151,39 @@ func (m *Model) startSearchIntradayWorker(code, name, date string) tea.Cmd {
 	m.searchIntradayWorker = make(chan struct{})
 	m.searchIntradayUpdateCh = make(chan struct{}, 10) // 带缓冲，避免阻塞
 
+	// 在主线程捕获 prevClose，避免 worker goroutine 读取 m.searchResult 竞态
+	prevClose := 0.0
+	if m.searchResult != nil {
+		prevClose = m.searchResult.PrevClose
+	}
+
 	logDebug("log.search.workerStart", code, date)
 
 	// 启动临时 goroutine
-	go m.runSearchIntradayWorker(code, name, date)
+	go m.runSearchIntradayWorker(code, name, date, prevClose)
 
 	// 启动监听更新的 cmd
 	return m.waitForSearchIntradayUpdate()
 }
 
 // runSearchIntradayWorker 运行搜索模式的高频临时 worker
-func (m *Model) runSearchIntradayWorker(code, name, date string) {
+func (m *Model) runSearchIntradayWorker(code, name, date string, prevClose float64) {
 	// 使用 5 秒间隔的 ticker（高频刷新）
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	// 首次立即执行数据获取（不等待第一个 tick）
-	m.fetchAndStoreSearchIntradayData(code, name, date)
+	m.fetchAndStoreSearchIntradayData(code, name, date, prevClose)
 
 	// 定时采集循环
 	for {
 		select {
 		case <-ticker.C:
-			// 检查是否仍在搜索模式
-			if !m.isSearchMode || m.state != consts.SearchResultWithActions {
+			// 检查是否仍在搜索模式（锁内读取防止与 stopSearchIntradayWorker 竞态）
+			m.searchIntradayMu.RLock()
+			stillSearchMode := m.isSearchMode
+			m.searchIntradayMu.RUnlock()
+			if !stillSearchMode || m.state != consts.SearchResultWithActions {
 				logDebug("log.search.workerAutoStop", code)
 				return
 			}
@@ -1184,12 +1193,12 @@ func (m *Model) runSearchIntradayWorker(code, name, date string) {
 				logDebug("log.search.marketClosed", code)
 				// 市场关闭时仍然执行一次获取（获取当日完整数据）
 				// 然后停止 worker
-				m.fetchAndStoreSearchIntradayData(code, name, date)
+				m.fetchAndStoreSearchIntradayData(code, name, date, prevClose)
 				return
 			}
 
 			// 采集数据并更新内存
-			m.fetchAndStoreSearchIntradayData(code, name, date)
+			m.fetchAndStoreSearchIntradayData(code, name, date, prevClose)
 
 		case <-m.searchIntradayWorker:
 			// 收到停止信号
@@ -1200,7 +1209,8 @@ func (m *Model) runSearchIntradayWorker(code, name, date string) {
 }
 
 // fetchAndStoreSearchIntradayData 获取并存储搜索模式的分时数据（仅内存）
-func (m *Model) fetchAndStoreSearchIntradayData(code, name, date string) {
+// prevClose 由调用方在主线程安全捕获后传入，避免 goroutine 读取 m.searchResult 竞态
+func (m *Model) fetchAndStoreSearchIntradayData(code, name, date string, prevClose float64) {
 	// 从 API 获取最新数据
 	datapoints, err := intraday.FetchIntradayDataFromAPI(code)
 	if err != nil {
@@ -1217,14 +1227,8 @@ func (m *Model) fetchAndStoreSearchIntradayData(code, name, date string) {
 	// 获取市场类型
 	market := string(api.GetMarketType(code))
 
-	// 获取昨收价（用于图表颜色判断）
-	prevClose := 0.0
-	if m.searchResult != nil {
-		prevClose = m.searchResult.PrevClose
-	}
-
 	// 直接使用新数据替换（不需要合并，每次都是完整数据）
-	m.searchIntradayData = &IntradayData{
+	newData := &IntradayData{
 		Code:       code,
 		Name:       name,
 		Date:       date,
@@ -1234,9 +1238,15 @@ func (m *Model) fetchAndStoreSearchIntradayData(code, name, date string) {
 		PrevClose:  prevClose,
 	}
 
+	// 加锁写入，防止与 UI 线程读取竞态
+	m.searchIntradayMu.Lock()
+	m.searchIntradayData = newData
+	m.searchIntradayMu.Unlock()
+
 	logDebug("log.search.dataUpdated", code, len(datapoints), time.Now().Format("15:04:05"))
 
-	// 发送更新通知，触发 UI 重新渲染
+	// 发送更新通知，触发 UI 重新渲染（加锁防止向已关闭 channel 发送）
+	m.searchIntradayMu.Lock()
 	if m.searchIntradayUpdateCh != nil {
 		select {
 		case m.searchIntradayUpdateCh <- struct{}{}:
@@ -1245,6 +1255,7 @@ func (m *Model) fetchAndStoreSearchIntradayData(code, name, date string) {
 			// channel 满了，跳过（不阻塞）
 		}
 	}
+	m.searchIntradayMu.Unlock()
 }
 
 // stopSearchIntradayWorker 停止搜索模式的临时 worker
@@ -1255,15 +1266,15 @@ func (m *Model) stopSearchIntradayWorker() {
 		logDebug("log.search.workerClosed")
 	}
 
-	// 关闭更新通知 channel
+	// 关闭更新通知 channel 并清理数据（加锁防止与 worker 竞态）
+	m.searchIntradayMu.Lock()
 	if m.searchIntradayUpdateCh != nil {
 		close(m.searchIntradayUpdateCh)
 		m.searchIntradayUpdateCh = nil
 	}
-
-	// 清理内存数据
 	m.searchIntradayData = nil
 	m.isSearchMode = false
+	m.searchIntradayMu.Unlock()
 
 	logDebug("log.search.cleanupComplete")
 }
@@ -1276,17 +1287,22 @@ func (m *Model) stopSearchIntradayWorker() {
 func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.Model {
 	logDebug("log.search.chartCreate", termWidth, termHeight)
 
-	if m.searchIntradayData == nil {
+	// 快照：锁内捕获指针防止与 worker 写入竞态（结构体创建后不修改，指针捕获后安全）
+	m.searchIntradayMu.RLock()
+	searchData := m.searchIntradayData
+	m.searchIntradayMu.RUnlock()
+
+	if searchData == nil {
 		logDebug("log.search.chartDataNil")
 		return nil
 	}
 
-	if len(m.searchIntradayData.Datapoints) == 0 {
+	if len(searchData.Datapoints) == 0 {
 		logDebug("log.search.chartDataEmpty")
 		return nil
 	}
 
-	logDebug("log.search.chartDataPoints", len(m.searchIntradayData.Datapoints))
+	logDebug("log.search.chartDataPoints", len(searchData.Datapoints))
 
 	// 最小大小检查（搜索模式使用更小的最小尺寸）
 	minWidth := 40
@@ -1308,8 +1324,8 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 
 	// === 创建完整时间框架（根据市场配置动态生成） ===
 	timeFramework := m.createFixedTimeRange(
-		m.searchIntradayData.Date,
-		m.searchIntradayData.Market,
+		searchData.Date,
+		searchData.Market,
 	)
 
 	if len(timeFramework) == 0 {
@@ -1319,14 +1335,14 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 
 	// === 将实际数据填充到时间框架中 ===
 	dataMap := make(map[string]float64)
-	for _, dp := range m.searchIntradayData.Datapoints {
+	for _, dp := range searchData.Datapoints {
 		dataMap[dp.Time] = dp.Price
 	}
 
 	// 填充价格值（使用最后已知价格填充空白）
 	var lastKnownPrice float64
-	if len(m.searchIntradayData.Datapoints) > 0 {
-		lastKnownPrice = m.searchIntradayData.Datapoints[0].Price
+	if len(searchData.Datapoints) > 0 {
+		lastKnownPrice = searchData.Datapoints[0].Price
 	}
 
 	dataPoints := make([]float64, len(timeFramework))
@@ -1345,8 +1361,8 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 	}
 
 	// === 智能计算Y轴范围 ===
-	actualPrices := make([]float64, len(m.searchIntradayData.Datapoints))
-	for i, dp := range m.searchIntradayData.Datapoints {
+	actualPrices := make([]float64, len(searchData.Datapoints))
+	for i, dp := range searchData.Datapoints {
 		actualPrices[i] = dp.Price
 	}
 
@@ -1355,16 +1371,16 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 	logDebug("log.search.chartPriceRange", minPrice, maxPrice, margin)
 
 	// === 设置样式：A股红涨绿跌，非A股绿涨红跌 ===
-	lastPrice := m.searchIntradayData.Datapoints[len(m.searchIntradayData.Datapoints)-1].Price
-	prevClose := m.searchIntradayData.PrevClose
+	lastPrice := searchData.Datapoints[len(searchData.Datapoints)-1].Price
+	prevClose := searchData.PrevClose
 
 	comparisonBase := prevClose
 	if comparisonBase == 0 {
-		comparisonBase = m.searchIntradayData.Datapoints[0].Price
+		comparisonBase = searchData.Datapoints[0].Price
 	}
 
-	isAShare := strings.HasPrefix(m.searchIntradayData.Code, "SH") ||
-		strings.HasPrefix(m.searchIntradayData.Code, "SZ")
+	isAShare := strings.HasPrefix(searchData.Code, "SH") ||
+		strings.HasPrefix(searchData.Code, "SZ")
 
 	var chartStyle lipgloss.Style
 	if lastPrice > comparisonBase {
@@ -1411,7 +1427,7 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 		totalMinutes := hour*60 + minute
 
 		// 根据市场类型显示不同的时间标签
-		switch m.searchIntradayData.Market {
+		switch searchData.Market {
 		case "china":
 			// A股：9:30 和 15:00
 			diff1 := totalMinutes - 570
@@ -1487,16 +1503,18 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 
 // waitForSearchIntradayUpdate 监听搜索模式数据更新通知
 func (m *Model) waitForSearchIntradayUpdate() tea.Cmd {
+	// 在锁内捕获 channel 引用，避免闭包中访问竞态
+	m.searchIntradayMu.RLock()
+	ch := m.searchIntradayUpdateCh
+	m.searchIntradayMu.RUnlock()
+
 	return func() tea.Msg {
-		// 阻塞等待 channel 消息
-		if m.searchIntradayUpdateCh != nil {
-			_, ok := <-m.searchIntradayUpdateCh
+		if ch != nil {
+			_, ok := <-ch
 			if ok {
-				// 收到更新通知，返回消息触发 UI 重新渲染
 				return searchIntradayUpdateMsg{}
 			}
 		}
-		// channel 已关闭，返回 nil
 		return nil
 	}
 }
