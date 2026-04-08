@@ -154,28 +154,25 @@ func sortSectors(sectors []types.Sector, field SortField, direction SortDirectio
 
 	// 使用 Go 标准库 sort
 	sort.Slice(sectors, func(i, j int) bool {
-		var less bool
+		if direction == consts.SortDesc {
+			i, j = j, i
+		}
 		switch field {
 		case consts.SortBySectorName:
-			less = sectors[i].Name < sectors[j].Name
+			return sectors[i].Name < sectors[j].Name
 		case consts.SortBySectorChangePercent:
-			less = sectors[i].ChangePercent < sectors[j].ChangePercent
+			return sectors[i].ChangePercent < sectors[j].ChangePercent
 		case consts.SortBySectorChange:
-			less = sectors[i].Change < sectors[j].Change
+			return sectors[i].Change < sectors[j].Change
 		case consts.SortBySectorTurnover:
-			less = sectors[i].Turnover < sectors[j].Turnover
+			return sectors[i].Turnover < sectors[j].Turnover
 		case consts.SortByTurnoverRate:
-			less = sectors[i].TurnoverRate < sectors[j].TurnoverRate
+			return sectors[i].TurnoverRate < sectors[j].TurnoverRate
 		case consts.SortBySectorRiseCount:
-			less = sectors[i].RiseCount < sectors[j].RiseCount
+			return sectors[i].RiseCount < sectors[j].RiseCount
 		default:
-			less = sectors[i].Name < sectors[j].Name
+			return sectors[i].Name < sectors[j].Name
 		}
-
-		if direction == consts.SortDesc {
-			return !less
-		}
-		return less
 	})
 }
 
@@ -186,31 +183,28 @@ func sortSectorStocks(stocks []types.SectorStock, field SortField, direction Sor
 	}
 
 	sort.Slice(stocks, func(i, j int) bool {
-		var less bool
+		if direction == consts.SortDesc {
+			i, j = j, i
+		}
 		switch field {
 		case consts.SortByCode:
-			less = stocks[i].Code < stocks[j].Code
+			return stocks[i].Code < stocks[j].Code
 		case consts.SortByName:
-			less = stocks[i].Name < stocks[j].Name
+			return stocks[i].Name < stocks[j].Name
 		case consts.SortByPrice:
-			less = stocks[i].Price < stocks[j].Price
+			return stocks[i].Price < stocks[j].Price
 		case consts.SortByChangePercent:
-			less = stocks[i].ChangePercent < stocks[j].ChangePercent
+			return stocks[i].ChangePercent < stocks[j].ChangePercent
 		case consts.SortByChange:
-			less = stocks[i].Change < stocks[j].Change
+			return stocks[i].Change < stocks[j].Change
 		case consts.SortByVolume:
-			less = stocks[i].Volume < stocks[j].Volume
+			return stocks[i].Volume < stocks[j].Volume
 		case consts.SortBySectorTurnover:
-			less = stocks[i].Turnover < stocks[j].Turnover
+			return stocks[i].Turnover < stocks[j].Turnover
 		case consts.SortByTurnoverRate:
-			less = stocks[i].TurnoverRate < stocks[j].TurnoverRate
+			return stocks[i].TurnoverRate < stocks[j].TurnoverRate
 		default:
-			less = stocks[i].Name < stocks[j].Name
+			return stocks[i].Name < stocks[j].Name
 		}
-
-		if direction == consts.SortDesc {
-			return !less
-		}
-		return less
 	})
 }

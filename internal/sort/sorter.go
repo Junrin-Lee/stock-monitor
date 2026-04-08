@@ -25,6 +25,11 @@ func NewDefaultSorter() *DefaultSorter {
 // SortPortfolio 排序持股列表
 func (s *DefaultSorter) SortPortfolio(stocks []types.Stock, field consts.SortField, direction consts.SortDirection) {
 	sort.Slice(stocks, func(i, j int) bool {
+		// 降序时交换索引，使 < 变成 >，且相等时仍返回 false（满足严格弱序）
+		if direction == consts.SortDesc {
+			i, j = j, i
+		}
+
 		var result bool
 
 		switch field {
@@ -58,10 +63,6 @@ func (s *DefaultSorter) SortPortfolio(stocks []types.Stock, field consts.SortFie
 			result = stocks[i].Code < stocks[j].Code
 		}
 
-		if direction == consts.SortDesc {
-			result = !result
-		}
-
 		return result
 	})
 }
@@ -69,6 +70,11 @@ func (s *DefaultSorter) SortPortfolio(stocks []types.Stock, field consts.SortFie
 // SortWatchlist 排序自选列表（使用缓存的股价数据，避免API调用）
 func (s *DefaultSorter) SortWatchlist(stocks []types.WatchlistStock, stockCache map[string]*types.StockPriceCacheEntry, field consts.SortField, direction consts.SortDirection) {
 	sort.Slice(stocks, func(i, j int) bool {
+		// 降序时交换索引，满足严格弱序
+		if direction == consts.SortDesc {
+			i, j = j, i
+		}
+
 		var result bool
 
 		// 获取缓存的股价数据
@@ -102,10 +108,6 @@ func (s *DefaultSorter) SortWatchlist(stocks []types.WatchlistStock, stockCache 
 			result = volumeI < volumeJ
 		default:
 			result = stocks[i].Code < stocks[j].Code
-		}
-
-		if direction == consts.SortDesc {
-			result = !result
 		}
 
 		return result
