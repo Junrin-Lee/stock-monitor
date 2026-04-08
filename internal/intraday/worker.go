@@ -151,13 +151,23 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 
 			//获取 worker 槽位（限制并发数），支持取消
 			checkHours := checkMarketHours // 捕获到 goroutine 闭包
+
+			// Per-stock in-flight guard：防止同一 stock 并发 fetch 导致 read-merge-write 竞态
+			if _, loaded := im.fetchInFlight.LoadOrStore(stockCode, true); loaded {
+				continue // 上一次 fetch 尚未完成，跳过本次 tick
+			}
+
 			select {
 			case im.workerPool <- struct{}{}:
 			case <-im.CancelChan:
+				im.fetchInFlight.Delete(stockCode)
 				return
 			}
 			go func() {
-				defer func() { <-im.workerPool }()
+				defer func() {
+					<-im.workerPool
+					im.fetchInFlight.Delete(stockCode)
+				}()
 				decision, err := im.fetchAndSaveIntradayData(stockCode, stockName, im.model, checkHours, targetDate)
 
 				// 更新元数据

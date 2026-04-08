@@ -14,6 +14,7 @@ type IntradayManager struct {
 	workerPool     chan struct{}                     // Semaphore for max 10 concurrent workers
 	CancelChan     chan struct{}                     // Channel to stop all workers (exported for intraday_chart.go)
 	mu             sync.RWMutex                      // Protects activeStocks
+	fetchInFlight  sync.Map                          // Per-stock in-flight fetch guard (prevents concurrent fetch for same stock)
 	fetchInterval  time.Duration                     // 1 minute
 	workerMetadata map[string]*types.WorkerMetadata  // Track each worker's state
 	metadataMutex  sync.RWMutex                      // Protects workerMetadata
@@ -134,10 +135,16 @@ func (im *IntradayManager) startWorker(stockCode, stockName string, m ModelInter
 					continue
 				}
 
+				// Per-stock in-flight guard：防止同一 stock 并发 fetch
+				if _, loaded := im.fetchInFlight.LoadOrStore(stockCode, true); loaded {
+					continue
+				}
+
 				// Acquire worker slot with cancel support
 				select {
 				case im.workerPool <- struct{}{}:
 				case <-im.CancelChan:
+					im.fetchInFlight.Delete(stockCode)
 					return
 				}
 
@@ -145,6 +152,7 @@ func (im *IntradayManager) startWorker(stockCode, stockName string, m ModelInter
 				go func() {
 					defer func() {
 						<-im.workerPool // Release slot
+						im.fetchInFlight.Delete(stockCode)
 					}()
 					// 使用空字符串作为 targetDate，让函数自动根据交易状态计算日期
 					im.fetchAndSaveIntradayData(stockCode, stockName, m, true, "")
