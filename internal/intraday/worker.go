@@ -22,9 +22,7 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 		im.mu.Unlock()
 
 		im.metadataMutex.Lock()
-		if meta, exists := im.workerMetadata[stockCode]; exists {
-			meta.IsRunning = false
-		}
+		delete(im.workerMetadata, stockCode)
 		im.metadataMutex.Unlock()
 
 		logInfoDirect("[Intraday] Worker stopped for %s", stockCode)
@@ -151,9 +149,13 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 				}
 			}
 
-			//获取 worker 槽位（限制并发数）
+			//获取 worker 槽位（限制并发数），支持取消
 			checkHours := checkMarketHours // 捕获到 goroutine 闭包
-			im.workerPool <- struct{}{}
+			select {
+			case im.workerPool <- struct{}{}:
+			case <-im.CancelChan:
+				return
+			}
 			go func() {
 				defer func() { <-im.workerPool }()
 				decision, err := im.fetchAndSaveIntradayData(stockCode, stockName, im.model, checkHours, targetDate)

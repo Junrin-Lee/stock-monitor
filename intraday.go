@@ -59,6 +59,15 @@ func (a *modelAdapter) GetStockPriceMutex() *sync.RWMutex {
 	return &a.model.stockPriceMutex
 }
 
+func (a *modelAdapter) GetStockPriceCacheEntry(code string) interface{} {
+	a.model.stockPriceMutex.RLock()
+	defer a.model.stockPriceMutex.RUnlock()
+	if entry, exists := a.model.stockPriceCache[code]; exists {
+		return &cacheEntryAdapter{entry: entry}
+	}
+	return nil
+}
+
 // configAdapter adapts Config to the interface expected by intraday package
 type configAdapter struct {
 	config *Config

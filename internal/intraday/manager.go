@@ -26,6 +26,9 @@ type ModelInterface interface {
 	GetConfig() interface{}
 	GetStockPriceCache() map[string]interface{}
 	GetStockPriceMutex() *sync.RWMutex
+	// GetStockPriceCacheEntry returns a single cache entry by code, avoiding full map copy.
+	// Returns nil if not found.
+	GetStockPriceCacheEntry(code string) interface{}
 }
 
 // NewIntradayManager creates and initializes an IntradayManager
@@ -133,8 +136,12 @@ func (im *IntradayManager) startWorker(stockCode, stockName string, m ModelInter
 					continue
 				}
 
-				// Acquire worker slot (blocks if all 10 slots are busy)
-				im.workerPool <- struct{}{}
+				// Acquire worker slot with cancel support
+				select {
+				case im.workerPool <- struct{}{}:
+				case <-im.CancelChan:
+					return
+				}
 
 				// Fetch with timeout
 				go func() {

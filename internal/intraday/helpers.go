@@ -213,19 +213,13 @@ func (im *IntradayManager) fetchAndSaveIntradayData(stockCode, stockName string,
 		logDebug("log.intraday.priceUpdate", stockCode, diff.PriceChangeCount, diff.NewEntryCount)
 	}
 
-	// NEW: 如果 existingData.PrevClose 为空，从缓存获取
+	// NEW: 如果 existingData.PrevClose 为空，从缓存获取（单 key 查询，避免全量复制）
 	if existingData.PrevClose == 0 {
-		cache := m.GetStockPriceCache()
-		mutex := m.GetStockPriceMutex()
-
-		mutex.RLock()
-		if entry, exists := cache[stockCode]; exists {
-			// Type assertion to extract PrevClose
+		if entry := m.GetStockPriceCacheEntry(stockCode); entry != nil {
 			if data, ok := entry.(interface{ GetPrevClose() float64 }); ok {
 				existingData.PrevClose = data.GetPrevClose()
 			}
 		}
-		mutex.RUnlock()
 
 		if existingData.PrevClose > 0 {
 			logDebug("log.intraday.prevCloseSet", stockCode, existingData.PrevClose)

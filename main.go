@@ -663,6 +663,16 @@ func (m *Model) GetStockPriceMutex() *sync.RWMutex {
 	return &m.stockPriceMutex
 }
 
+// GetStockPriceCacheEntry returns a single cache entry by code, avoiding full map copy.
+func (m *Model) GetStockPriceCacheEntry(code string) interface{} {
+	m.stockPriceMutex.RLock()
+	defer m.stockPriceMutex.RUnlock()
+	if entry, exists := m.stockPriceCache[code]; exists {
+		return entry
+	}
+	return nil
+}
+
 // ============================================================================
 // Column Management Methods (delegating to internal/ui)
 // ============================================================================
