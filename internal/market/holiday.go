@@ -7,7 +7,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
+)
+
+// calendarCache caches loaded calendar data in memory to avoid repeated file reads.
+var (
+	calendarCacheMu   sync.RWMutex
+	calendarCacheData = make(map[int]*CalendarData) // year → calendar
 )
 
 // Logger 日志记录器接口
@@ -310,6 +317,7 @@ func DiffCalendarData(old, new *CalendarData) int {
 
 // SaveCalendarData 保存日历数据（原子写：temp+rename 防止截断）
 func SaveCalendarData(data *CalendarData, year int) error {
+	invalidateCalendarCache(year)
 	dir := filepath.Join(".", "data", "calendars", "CN")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -349,9 +357,36 @@ func SaveCalendarData(data *CalendarData, year int) error {
 	return nil
 }
 
+// getCachedCalendar returns calendar data from memory cache, loading from disk on first access.
+func getCachedCalendar(year int) (*CalendarData, error) {
+	calendarCacheMu.RLock()
+	if cal, ok := calendarCacheData[year]; ok {
+		calendarCacheMu.RUnlock()
+		return cal, nil
+	}
+	calendarCacheMu.RUnlock()
+
+	cal, err := LoadExistingCalendar(year)
+	if err != nil {
+		return nil, err
+	}
+
+	calendarCacheMu.Lock()
+	calendarCacheData[year] = cal
+	calendarCacheMu.Unlock()
+	return cal, nil
+}
+
+// invalidateCalendarCache removes cached data for a year so next read reloads from disk.
+func invalidateCalendarCache(year int) {
+	calendarCacheMu.Lock()
+	delete(calendarCacheData, year)
+	calendarCacheMu.Unlock()
+}
+
 // IsHoliday 检查指定日期是否为节假日
 func IsHoliday(date string, year int) bool {
-	calendar, err := LoadExistingCalendar(year)
+	calendar, err := getCachedCalendar(year)
 	if err != nil {
 		return false
 	}
@@ -360,7 +395,7 @@ func IsHoliday(date string, year int) bool {
 
 // IsCompDay 检查指定日期是否为补班日
 func IsCompDay(date string, year int) bool {
-	calendar, err := LoadExistingCalendar(year)
+	calendar, err := getCachedCalendar(year)
 	if err != nil {
 		return false
 	}

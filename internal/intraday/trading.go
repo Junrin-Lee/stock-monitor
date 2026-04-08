@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"stock-monitor/internal/api"
+	"stock-monitor/internal/market"
 	"stock-monitor/internal/types"
 )
 
@@ -15,13 +16,21 @@ import (
 func GetTradingState(now time.Time, marketType string) types.TradingState {
 	weekday := now.Weekday()
 
-	// 检查周末
+	// 检查周末（补班日除外）
+	date := now.Format("20060102")
+	year := now.Year()
 	if weekday == time.Saturday || weekday == time.Sunday {
-		return types.TradingStateWeekend
+		if marketType == "china" && market.IsCompDay(date, year) {
+			// 补班日按正常交易日处理，继续往下检查交易时段
+		} else {
+			return types.TradingStateWeekend
+		}
 	}
 
-	// TODO: 假日检测 (v2 enhancement)
-	// 目前假设工作日都是交易日
+	// 节假日检测（仅 A 股有日历数据）
+	if marketType == "china" && market.IsHoliday(date, year) {
+		return types.TradingStateHoliday
+	}
 
 	// 获取市场特定的交易时段
 	var morningStart, morningEnd, afternoonStart, afternoonEnd time.Time
