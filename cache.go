@@ -92,12 +92,15 @@ func (m *Model) startStockPriceUpdates() tea.Cmd {
 
 	logDebug("log.cache.startAsync", len(uniqueStockCodes))
 
-	// 逐个发起异步获取请求
+	// 逐个发起异步获取请求（跳过已在更新中的股票，防止请求堆积）
 	var cmds []tea.Cmd
 	for _, code := range uniqueStockCodes {
-		// 标记正在更新
 		m.stockPriceMutex.Lock()
 		if entry, exists := m.stockPriceCache[code]; exists {
+			if entry.IsUpdating {
+				m.stockPriceMutex.Unlock()
+				continue // 已在更新中，跳过
+			}
 			entry.IsUpdating = true
 		} else {
 			m.stockPriceCache[code] = &StockPriceCacheEntry{
