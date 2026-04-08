@@ -61,6 +61,8 @@ func GetStockPrice(symbol string) *types.StockData {
 			return data
 		}
 		log.Error("log.api.tencentFail")
+		// A股/港股不应穿透到 US API，避免发送无效代码和掩盖区域 API 故障
+		return nil
 	}
 
 	data := tryMultiUSAPI(symbol)
