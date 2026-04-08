@@ -104,23 +104,29 @@ func FindPreviousTradingDay(stockCode string, currentDate string, m ModelInterfa
 		return currentDate // 解析失败，返回原日期
 	}
 
-	// 最多回溯 7 天，找到上一个交易日
-	for i := 1; i <= 7; i++ {
+	// 最多回溯 15 天（覆盖春节、国庆等长假+调休）
+	for i := 1; i <= 15; i++ {
 		prevDate := date.AddDate(0, 0, -i)
 		weekday := prevDate.Weekday()
+		dateStr := prevDate.Format("20060102")
 
-		// 跳过周末（周六、周日）
 		if weekday == time.Saturday || weekday == time.Sunday {
+			// A 股补班日是交易日
+			if marketType == "china" && market.IsCompDay(dateStr, prevDate.Year()) {
+				return dateStr
+			}
 			continue
 		}
 
-		// TODO: 检查假日日历 (v2 enhancement)
-		// 目前假设非周末的工作日都是交易日
+		// A 股节假日跳过
+		if marketType == "china" && market.IsHoliday(dateStr, prevDate.Year()) {
+			continue
+		}
 
-		return prevDate.Format("20060102")
+		return dateStr
 	}
 
-	// 降级：如果 7 天内找不到，直接返回前一天
+	// 降级：如果 15 天内找不到，直接返回前一天
 	return date.AddDate(0, 0, -1).Format("20060102")
 }
 
@@ -187,119 +193,19 @@ func GetTradingDayForCollection(stockCode string, m ModelInterface) (string, typ
 	}
 }
 
-// IsMarketOpen 检查当前是否在交易时间内（支持多市场）
-func IsMarketOpen(stockCode string, m ModelInterface) bool {
-	market := string(api.GetMarketType(stockCode))
-
-	// Get market config
-	config := m.GetConfig()
-
-	// Type assertion to access market configs
-	type MarketGetter interface {
-		GetMarkets() interface {
-			GetChina() interface{ GetTradingSessions() []interface{} }
-			GetUS() interface{ GetTradingSessions() []interface{} }
-			GetHongKong() interface{ GetTradingSessions() []interface{} }
-		}
-	}
-
-	var tradingSessions []interface{}
-	if cfg, ok := config.(MarketGetter); ok {
-		switch market {
-		case "china":
-			tradingSessions = cfg.GetMarkets().GetChina().GetTradingSessions()
-		case "us":
-			tradingSessions = cfg.GetMarkets().GetUS().GetTradingSessions()
-		case "hongkong":
-			tradingSessions = cfg.GetMarkets().GetHongKong().GetTradingSessions()
-		default:
-			logDebug("log.market.unknownType", stockCode, market)
-			return false
-		}
-	}
-
-	// 检查配置是否有效（向后兼容降级）
-	if len(tradingSessions) == 0 {
-		if market == "china" {
-			return isMarketOpenHardcoded() // 保留老版本硬编码逻辑
-		}
+// IsMarketOpen 检查当前是否在交易时间内（支持多市场时区+节假日）
+// 基于 GetTradingState 统一判断，确保时区转换和节假日检测的一致性
+// 注意：午休时段不算"开市"，worker 会暂停采集避免连续 skip 触发 auto-stop
+func IsMarketOpen(stockCode string, _ ModelInterface) bool {
+	marketType := string(api.GetMarketType(stockCode))
+	location, err := GetMarketLocation(marketType)
+	if err != nil {
 		return false
 	}
-
-	now := time.Now()
-	return isMarketOpenForConfig(now, tradingSessions)
-}
-
-// isMarketOpenHardcoded 硬编码的A股交易时间判断（降级方案）
-func isMarketOpenHardcoded() bool {
-	now := time.Now()
-
-	// Check if weekday
-	weekday := now.Weekday()
-	if weekday == time.Saturday || weekday == time.Sunday {
-		return false
-	}
-
-	// Market hours: 09:30 - 11:30, 13:00 - 15:00 (China timezone)
-	hour := now.Hour()
-	minute := now.Minute()
-	currentTime := hour*100 + minute
-
-	// Morning session: 09:30 - 11:30
-	if currentTime >= 930 && currentTime <= 1130 {
-		return true
-	}
-
-	// Afternoon session: 13:00 - 15:00
-	if currentTime >= 1300 && currentTime <= 1500 {
-		return true
-	}
-
-	return false
-}
-
-// isMarketOpenForConfig checks if market is open based on trading sessions config
-func isMarketOpenForConfig(now time.Time, sessions []interface{}) bool {
-	// Check if weekday
-	weekday := now.Weekday()
-	if weekday == time.Saturday || weekday == time.Sunday {
-		return false
-	}
-
-	// Check each trading session
-	for _, session := range sessions {
-		// Type assertion for session
-		type SessionGetter interface {
-			GetStartTime() string
-			GetEndTime() string
-		}
-
-		if s, ok := session.(SessionGetter); ok {
-			// Parse time strings (format: "09:30", "15:00")
-			startParts := parseTimeString(s.GetStartTime())
-			endParts := parseTimeString(s.GetEndTime())
-
-			if len(startParts) == 2 && len(endParts) == 2 {
-				startTime := time.Date(now.Year(), now.Month(), now.Day(), startParts[0], startParts[1], 0, 0, now.Location())
-				endTime := time.Date(now.Year(), now.Month(), now.Day(), endParts[0], endParts[1], 0, 0, now.Location())
-
-				if !now.Before(startTime) && now.Before(endTime) {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
-}
-
-// parseTimeString parses "09:30" format to [hour, minute]
-func parseTimeString(timeStr string) []int {
-	var hour, minute int
-	if _, err := fmt.Sscanf(timeStr, "%d:%d", &hour, &minute); err == nil {
-		return []int{hour, minute}
-	}
-	return []int{}
+	now := time.Now().In(location)
+	state := GetTradingState(now, marketType)
+	return state == types.TradingStateLive ||
+		state == types.TradingStateAuction
 }
 
 // GetMarketLocation returns the timezone location for a market type

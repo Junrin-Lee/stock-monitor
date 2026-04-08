@@ -8,6 +8,7 @@ import (
 	"stock-monitor/internal/api"
 	"stock-monitor/internal/consts"
 	"stock-monitor/internal/intraday"
+	"stock-monitor/internal/types"
 	"strconv"
 	"strings"
 	"time"
@@ -1194,13 +1195,21 @@ func (m *Model) runSearchIntradayWorker(code, name, date string, prevClose float
 				return
 			}
 
-			// 检查市场是否开市（闭市时降低频率）
-			if !intraday.IsMarketOpen(code, m) {
-				logDebug("log.search.marketClosed", code)
-				// 市场关闭时仍然执行一次获取（获取当日完整数据）
-				// 然后停止 worker
-				m.fetchAndStoreSearchIntradayData(code, name, date, prevClose)
-				return
+			// 检查市场交易状态（区分午休和真正闭市）
+			marketType := string(api.GetMarketType(code))
+			if loc, locErr := intraday.GetMarketLocation(marketType); locErr == nil {
+				state := intraday.GetTradingState(time.Now().In(loc), marketType)
+				switch state {
+				case types.TradingStateLunchBreak:
+					// 午休期间：跳过本次 tick，等待下午开盘继续采集
+					continue
+				case types.TradingStatePostMarket, types.TradingStateWeekend, types.TradingStateHoliday:
+					logDebug("log.search.marketClosed", code)
+					// 真正闭市：执行一次最终获取后停止 worker
+					m.fetchAndStoreSearchIntradayData(code, name, date, prevClose)
+					return
+				}
+				// Live/Auction/PreMarket: 继续正常采集
 			}
 
 			// 采集数据并更新内存
