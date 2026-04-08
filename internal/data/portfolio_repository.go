@@ -75,11 +75,12 @@ func (r *PortfolioRepository) Save(stocks []*types.Stock) error {
 	}
 
 	// 原子写入（temp → sync → close → rename）
-	tmpPath := r.filePath + ".tmp"
-	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	dir := filepath.Dir(r.filePath)
+	f, err := os.CreateTemp(dir, filepath.Base(r.filePath)+".tmp.*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp portfolio file: %w", err)
 	}
+	tmpPath := f.Name()
 	if _, err := f.Write(data); err != nil {
 		f.Close()
 		os.Remove(tmpPath)

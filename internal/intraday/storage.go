@@ -2,12 +2,22 @@ package intraday
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"stock-monitor/internal/api"
 )
+
+// validateStockCode checks that a stock code does not contain path traversal sequences.
+func validateStockCode(code string) error {
+	if strings.Contains(code, "..") || strings.Contains(code, "/") || strings.Contains(code, "\\") || strings.Contains(code, string(os.PathSeparator)) {
+		return fmt.Errorf("invalid stock code: %q", code)
+	}
+	return nil
+}
 
 // File locks for thread-safe file operations
 var intradayFileLocks sync.Map // map[string]*sync.Mutex
@@ -23,12 +33,13 @@ func SaveIntradayData(filePath string, data *IntradayData) error {
 		return err
 	}
 
-	// Atomic write: temp → sync → close → rename
-	tempPath := filePath + ".tmp"
-	f, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	// Atomic write: temp → sync → close → rename (random suffix avoids multi-instance collision)
+	dir := filepath.Dir(filePath)
+	f, err := os.CreateTemp(dir, filepath.Base(filePath)+".tmp.*")
 	if err != nil {
 		return err
 	}
+	tempPath := f.Name()
 	if _, err := f.Write(jsonData); err != nil {
 		f.Close()
 		os.Remove(tempPath)
@@ -54,6 +65,9 @@ func getFileLock(filePath string) *sync.Mutex {
 
 // ensureIntradayDirectory creates the directory structure for a stock if needed
 func ensureIntradayDirectory(stockCode string) error {
+	if err := validateStockCode(stockCode); err != nil {
+		return err
+	}
 	dirPath := filepath.Join("data", "intraday", stockCode)
 	return os.MkdirAll(dirPath, 0755)
 }
@@ -78,6 +92,9 @@ func getMarketDirectory(code string) string {
 //
 //	→ old flat structure (data/intraday/SH600058/20251211.json)
 func GetIntradayFilePath(stockCode, date string) string {
+	if err := validateStockCode(stockCode); err != nil {
+		return ""
+	}
 	// Try new market-based structure first
 	marketDir := getMarketDirectory(stockCode)
 	newPath := filepath.Join("data", "intraday", marketDir, stockCode, date+".json")
@@ -92,6 +109,9 @@ func GetIntradayFilePath(stockCode, date string) string {
 // ensureIntradayDirectoryWithMarket creates market-based directory structure
 // New implementation that organizes stocks by market (CN/HK/US)
 func ensureIntradayDirectoryWithMarket(stockCode string) error {
+	if err := validateStockCode(stockCode); err != nil {
+		return err
+	}
 	marketDir := getMarketDirectory(stockCode)
 	dirPath := filepath.Join("data", "intraday", marketDir, stockCode)
 	return os.MkdirAll(dirPath, 0755)
