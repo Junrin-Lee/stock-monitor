@@ -275,13 +275,17 @@ func GetDefaultConfig() types.Config {
 func LoadConfig() types.Config {
 	data, err := os.ReadFile(consts.ConfigFile)
 	if err != nil {
-		// 如果配置文件不存在，创建默认配置文件
-		config := GetDefaultConfig()
-		if saveErr := SaveConfig(config); saveErr != nil {
-			// 首次运行配置创建失败仅记日志，不阻塞启动
-			fmt.Fprintf(os.Stderr, "Warning: failed to save default config: %v\n", saveErr)
+		if os.IsNotExist(err) {
+			// 首次运行：配置文件不存在，创建默认配置
+			config := GetDefaultConfig()
+			if saveErr := SaveConfig(config); saveErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to save default config: %v\n", saveErr)
+			}
+			return config
 		}
-		return config
+		// 非"文件不存在"错误（权限、I/O 等）：不覆盖用户配置，仅用默认值启动
+		fmt.Fprintf(os.Stderr, "Warning: failed to read config (%v), using defaults without overwriting\n", err)
+		return GetDefaultConfig()
 	}
 
 	var config types.Config
