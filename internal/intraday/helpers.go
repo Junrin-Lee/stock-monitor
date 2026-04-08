@@ -184,12 +184,15 @@ func (im *IntradayManager) fetchAndSaveIntradayData(stockCode, stockName string,
 
 	if fileExists(filePath) {
 		data, err := os.ReadFile(filePath)
-		if err == nil {
-			if unmarshalErr := json.Unmarshal(data, existingData); unmarshalErr != nil {
-				logDebug("log.intraday.unmarshalFail", stockCode, unmarshalErr)
-				// 文件损坏时重置为空数据，而非静默使用零值覆盖
-				existingData.Datapoints = []IntradayDataPoint{}
-			}
+		if err != nil {
+			logDebug("log.intraday.readFileFail", stockCode, err)
+			// 文件存在但无法读取（权限/IO 错误），不覆盖原文件
+			return SaveDecisionSkip, fmt.Errorf("cannot read existing file for %s: %w", stockCode, err)
+		}
+		if unmarshalErr := json.Unmarshal(data, existingData); unmarshalErr != nil {
+			logDebug("log.intraday.unmarshalFail", stockCode, unmarshalErr)
+			// 文件损坏，不覆盖原文件（保留现场以便排查）
+			return SaveDecisionSkip, fmt.Errorf("corrupted intraday file for %s: %w", stockCode, unmarshalErr)
 		}
 	}
 
