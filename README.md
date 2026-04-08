@@ -1,6 +1,6 @@
 # Stock Monitor
 
-[![Version](https://img.shields.io/badge/version-v9.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v9.1-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -185,7 +185,7 @@ Supported code formats:
 | **Alert System** ⏰ | Price/change percent/volume alerts with 5 trigger frequencies, cross-platform notifications |
 | **Global Markets** | Support for A-shares, US stocks, Hong Kong stocks |
 | **Multi-language** | Complete Chinese and English bilingual interface |
-| **Data Persistence** | Local storage, portfolio data never lost |
+| **Data Persistence** | Atomic writes, corruption protection, local storage ensures data never lost |
 
 ---
 
@@ -267,6 +267,7 @@ More shortcuts: [⌨️ Keyboard Shortcuts](doc/guides/keyboard-shortcuts.md)
 
 ### 📋 Version History
 
+- [v9.1](doc/changelogs/v9.1.md) - Data safety hardening & multi-market timezone
 - [v9.0](doc/changelogs/v9.0.md) - Sparkline trends & extended market hours
 - [v8.1](doc/changelogs/v8.1.md) - Cross-platform release automation
 - [v8.0](doc/changelogs/v8.0.md) - Sector market view

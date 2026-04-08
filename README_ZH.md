@@ -1,6 +1,6 @@
 # Stock Monitor
 
-[![Version](https://img.shields.io/badge/version-v9.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v9.1-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)]()
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
@@ -185,7 +185,7 @@ go build -o stock-monitor
 | **告警系统** ⏰ | 价格/涨跌幅/成交量告警，5 种触发频率，跨平台通知 |
 | **全球市场** | 支持 A 股、美股、港股等主流市场 |
 | **多语言** | 完整的中英文双语界面支持 |
-| **本地存储** | 数据永不丢失，支持离线使用 |
+| **本地存储** | 原子写入、数据损坏保护，本地存储数据永不丢失 |
 
 ---
 
@@ -267,6 +267,7 @@ go build -o stock-monitor
 
 ### 📋 版本历史
 
+- [v9.1](doc/changelogs/v9.1.md) - 数据安全加固 + 多市场时区
 - [v9.0](doc/changelogs/v9.0.md) - Sparkline 走势图 + 盘前盘后行情
 - [v8.1](doc/changelogs/v8.1.md) - 跨平台发布自动化
 - [v8.0](doc/changelogs/v8.0.md) - 板块市场查看
