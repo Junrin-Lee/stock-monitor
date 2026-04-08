@@ -33,7 +33,10 @@ func FetchIntradayDataFromAPI(stockCode string) ([]IntradayDataPoint, error) {
 			logDebug("log.intraday.yahooNoData", stockCode)
 		}
 
-		return nil, fmt.Errorf("Yahoo Finance API失败: %w", lastErr)
+		if lastErr != nil {
+			return nil, fmt.Errorf("Yahoo Finance API失败: %w", lastErr)
+		}
+		return nil, fmt.Errorf("Yahoo Finance API返回空数据: %s", stockCode)
 	}
 
 	// Hong Kong stocks: Try Tencent first, then Yahoo Finance as fallback
@@ -79,7 +82,10 @@ func FetchIntradayDataFromAPI(stockCode string) ([]IntradayDataPoint, error) {
 			logDebug("log.intraday.eastMoneyNoData", stockCode)
 		}
 
-		return nil, fmt.Errorf("所有港股API失败, 最后错误: %w", lastErr)
+		if lastErr != nil {
+			return nil, fmt.Errorf("所有港股API失败, 最后错误: %w", lastErr)
+		}
+		return nil, fmt.Errorf("所有港股API返回空数据: %s", stockCode)
 	}
 
 	// China A-shares: Use Chinese APIs (Tencent, EastMoney, Sina)
@@ -124,7 +130,10 @@ func FetchIntradayDataFromAPI(stockCode string) ([]IntradayDataPoint, error) {
 		logDebug("log.intraday.sinaNoData", stockCode)
 	}
 
-	return nil, fmt.Errorf("所有A股API失败, 最后错误: %w", lastErr)
+	if lastErr != nil {
+		return nil, fmt.Errorf("所有A股API失败, 最后错误: %w", lastErr)
+	}
+	return nil, fmt.Errorf("所有A股API返回空数据: %s", stockCode)
 }
 
 // tryGetIntradayFromSina fetches intraday data from Sina Finance API
