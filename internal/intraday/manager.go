@@ -14,7 +14,6 @@ type IntradayManager struct {
 	workerPool     chan struct{}                     // Semaphore for max 10 concurrent workers
 	CancelChan     chan struct{}                     // Channel to stop all workers (exported for intraday_chart.go)
 	mu             sync.RWMutex                      // Protects activeStocks
-	lastFetchTime  map[string]time.Time              // Track last fetch per stock
 	fetchInterval  time.Duration                     // 1 minute
 	workerMetadata map[string]*types.WorkerMetadata  // Track each worker's state
 	metadataMutex  sync.RWMutex                      // Protects workerMetadata
@@ -37,7 +36,6 @@ func NewIntradayManager(model ModelInterface) *IntradayManager {
 		activeStocks:   make(map[string]bool),
 		workerPool:     make(chan struct{}, 10), // Max 10 concurrent workers
 		CancelChan:     make(chan struct{}),
-		lastFetchTime:  make(map[string]time.Time),
 		fetchInterval:  1 * time.Minute,
 		workerMetadata: make(map[string]*types.WorkerMetadata),
 		model:          model,

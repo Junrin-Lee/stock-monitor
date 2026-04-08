@@ -42,26 +42,30 @@ func mergeDatapoints(existing, new []IntradayDataPoint) []IntradayDataPoint {
 	return result
 }
 
-// compareDatapoints 比较已有和新的数据点，检测价格变化
+// compareDatapoints 比较已有和新的数据点，检测价格或成交量变化
 // 时间复杂度: O(n+m)
 func CompareDatapoints(existing, new []IntradayDataPoint) DatapointDiffResult {
 	result := DatapointDiffResult{}
 
-	// 构建已有数据的 map (时间 -> 价格)
-	existingMap := make(map[string]float64, len(existing))
+	type snapshot struct {
+		Price  float64
+		Volume int64
+	}
+	// 构建已有数据的 map (时间 -> 价格+成交量)
+	existingMap := make(map[string]snapshot, len(existing))
 	for _, dp := range existing {
-		existingMap[dp.Time] = dp.Price
+		existingMap[dp.Time] = snapshot{Price: dp.Price, Volume: dp.Volume}
 	}
 
 	// 比较每个新数据点
 	for _, dp := range new {
-		existingPrice, exists := existingMap[dp.Time]
+		old, exists := existingMap[dp.Time]
 		if !exists {
 			// 新时间点
 			result.HasNewEntries = true
 			result.NewEntryCount++
-		} else if existingPrice != dp.Price {
-			// 价格变化
+		} else if old.Price != dp.Price || old.Volume != dp.Volume {
+			// 价格或成交量变化
 			result.HasPriceChanges = true
 			result.PriceChangeCount++
 		}
