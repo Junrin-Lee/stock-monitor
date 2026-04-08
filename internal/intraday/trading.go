@@ -130,6 +130,54 @@ func FindPreviousTradingDay(stockCode string, currentDate string, m ModelInterfa
 	return date.AddDate(0, 0, -1).Format("20060102")
 }
 
+// FindNextTradingDay 查找下一个交易日（支持多市场时区+节假日，与 FindPreviousTradingDay 对称）
+// stockCode: 股票代码（用于检测市场类型）
+// currentDate: 当前日期 (YYYYMMDD)
+// maxDate: 不超过此日期（通常是市场时区的今天）
+// 返回: (下一个交易日 YYYYMMDD, error)
+func FindNextTradingDay(stockCode string, currentDate string, maxDate time.Time) (string, error) {
+	marketType := string(api.GetMarketType(stockCode))
+	location, err := GetMarketLocation(marketType)
+	if err != nil {
+		location = time.Local
+	}
+
+	date, err := time.ParseInLocation("20060102", currentDate, location)
+	if err != nil {
+		return "", err
+	}
+
+	// 最多往后查找 15 天（覆盖长假）
+	for i := 1; i <= 15; i++ {
+		nextDate := date.AddDate(0, 0, i)
+
+		// 不能超过最大日期
+		if nextDate.After(maxDate) {
+			return "", fmt.Errorf("已到达最新日期")
+		}
+
+		weekday := nextDate.Weekday()
+		dateStr := nextDate.Format("20060102")
+
+		if weekday == time.Saturday || weekday == time.Sunday {
+			// A 股补班日是交易日
+			if marketType == "china" && market.IsCompDay(dateStr, nextDate.Year()) {
+				return dateStr, nil
+			}
+			continue
+		}
+
+		// A 股节假日跳过
+		if marketType == "china" && market.IsHoliday(dateStr, nextDate.Year()) {
+			continue
+		}
+
+		return dateStr, nil
+	}
+
+	return "", fmt.Errorf("无法找到下一个交易日")
+}
+
 // GetTradingDayForCollection 决定应该采集哪天的数据以及采集模式
 // stockCode: 股票代码
 // m: Model 引用

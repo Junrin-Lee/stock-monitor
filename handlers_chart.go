@@ -348,41 +348,14 @@ func findPreviousTradingDayFromDate(dateStr string) string {
 	return dateStr
 }
 
-// isWeekend 判断是否为周末
-func isWeekend(t time.Time) bool {
-	weekday := t.Weekday()
-	return weekday == time.Saturday || weekday == time.Sunday
-}
-
 // Note: findPreviousTradingDay wrapper - calls internal/intraday version for multi-market support
 func findPreviousTradingDay(stockCode string, currentDate string, m *Model) string {
 	return intraday.FindPreviousTradingDay(stockCode, currentDate, m)
 }
 
-// findNextTradingDay 查找下一个交易日（跳过周末）
-// 最多往后查找7天，避免无限循环
-func findNextTradingDay(currentDateStr string, maxDate time.Time) (string, error) {
-	currentDate, err := time.Parse("20060102", currentDateStr)
-	if err != nil {
-		return "", err
-	}
-
-	// 最多往后查找7天
-	for i := 1; i <= 7; i++ {
-		nextDate := currentDate.AddDate(0, 0, i)
-
-		// 不能超过最大日期（通常是今天）
-		if nextDate.After(maxDate) {
-			return "", fmt.Errorf("已到达最新日期")
-		}
-
-		if !isWeekend(nextDate) {
-			return nextDate.Format("20060102"), nil
-		}
-	}
-
-	// 如果7天内都是周末（理论上不可能），返回错误
-	return "", fmt.Errorf("无法找到下一个交易日")
+// findNextTradingDay wrapper - calls internal/intraday version for multi-market support
+func findNextTradingDay(stockCode string, currentDateStr string, maxDate time.Time) (string, error) {
+	return intraday.FindNextTradingDay(stockCode, currentDateStr, maxDate)
 }
 
 // formatDate 辅助函数: 格式化 YYYYMMDD → 可读日期
@@ -853,10 +826,15 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 
 	case "right":
-		// 导航到下一个交易日（跳过周末，最多到今天）
+		// 导航到下一个交易日（跳过周末和节假日，最多到市场时区的今天）
 		if m.chartData != nil {
-			today := time.Now()
-			newDateStr, err := findNextTradingDay(m.chartViewDate, today)
+			marketType := string(api.GetMarketType(m.chartViewStock))
+			loc, locErr := intraday.GetMarketLocation(marketType)
+			if locErr != nil {
+				loc = time.Local
+			}
+			today := time.Now().In(loc)
+			newDateStr, err := findNextTradingDay(m.chartViewStock, m.chartViewDate, today)
 			if err != nil {
 				// 已经是最新日期或无法找到下一个交易日
 				m.chartLoadError = err
@@ -870,7 +848,7 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 				// 最多再往后尝试10个交易日（但不超过今天）
 				found := false
 				for attempt := 0; attempt < 10; attempt++ {
-					newDateStr, err = findNextTradingDay(newDateStr, today)
+					newDateStr, err = findNextTradingDay(m.chartViewStock, newDateStr, today)
 					if err != nil {
 						break
 					}
