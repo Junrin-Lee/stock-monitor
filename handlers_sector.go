@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"stock-monitor/internal/api"
 	"stock-monitor/internal/api/china"
 	"stock-monitor/internal/consts"
 	"stock-monitor/internal/types"
@@ -102,6 +103,7 @@ func (m *Model) handleSectorViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.sectorSortField = consts.SortBySectorName
 		m.sectorSortDirection = consts.SortAsc
 		m.sectorIsSorted = false
+		sortSectors(m.sectorList, m.sectorSortField, m.sectorSortDirection)
 		m.message = "已恢复默认排序(按名称升序)"
 		return m, nil
 	}
@@ -160,10 +162,11 @@ func (m *Model) handleSectorStockList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// 添加到自选列表
+			// 添加到自选列表（包含市场类型）
 			newWatchStock := WatchlistStock{
-				Code: selectedStock.Code,
-				Name: selectedStock.Name,
+				Code:   selectedStock.Code,
+				Name:   selectedStock.Name,
+				Market: api.GetMarketType(selectedStock.Code),
 			}
 			m.watchlist.Stocks = append(m.watchlist.Stocks, newWatchStock)
 
@@ -229,6 +232,7 @@ func (m *Model) handleSectorStockList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.sectorSortField = consts.SortByName
 		m.sectorSortDirection = consts.SortAsc
 		m.sectorIsSorted = false
+		sortSectorStocks(m.sectorStocks, m.sectorSortField, m.sectorSortDirection)
 		m.message = "已恢复默认排序(按名称升序)"
 		return m, nil
 	}
