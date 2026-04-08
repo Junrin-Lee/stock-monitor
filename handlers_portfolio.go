@@ -702,7 +702,11 @@ func (m *Model) handlePortfolioSorting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.portfolioSortField = consts.SortByCode  // Reset to default
 		m.portfolioSortDirection = consts.SortAsc // Reset to default
 		// Reload original data order
-		m.portfolio = loadPortfolio()
+		portfolio, corrupted := loadPortfolio()
+		m.portfolio = portfolio
+		if corrupted {
+			m.portfolioCorrupted = true
+		}
 		m.resetPortfolioCursor()
 		// Return to portfolio page
 		m.state = consts.Monitoring

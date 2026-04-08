@@ -314,6 +314,11 @@ type Model struct {
 	sectorCache          map[types.SectorType]*types.SectorCacheEntry // 板块缓存
 	sectorCacheMutex     sync.RWMutex                                 // 板块缓存读写锁
 	sortMenuCursor       int                                          // 排序菜单光标(复用)
+
+	// Data corruption tracking - 防止损坏数据覆盖
+	portfolioCorrupted bool // 持仓数据加载时 JSON 解析失败
+	watchlistCorrupted bool // 自选数据加载时 JSON 解析失败
+	alertDataCorrupted bool // 告警数据加载时 JSON 解析失败
 }
 
 // MenuItem 菜单项结构

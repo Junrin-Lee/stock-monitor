@@ -11,21 +11,33 @@ import (
 // ============================================================================
 
 // savePortfolio 保存持仓数据到文件（使用 internal/data）
+// 如果数据因损坏/不可读而为空，跳过保存以防止覆盖原始数据
 func (m *Model) savePortfolio() {
+	if m.portfolioCorrupted && len(m.portfolio.Stocks) == 0 {
+		logErrorDirect("Skipping portfolio save: data was corrupted on load and is still empty")
+		return
+	}
 	portfolio := types.Portfolio{
 		Stocks: convertStocksToTypes(m.portfolio.Stocks),
 	}
 	if err := data.SavePortfolio(portfolio); err != nil {
 		logErrorDirect("Failed to save portfolio: %v", err)
+		return
 	}
+	m.portfolioCorrupted = false // 成功保存后清除损坏标记
 }
 
 // loadPortfolio 从文件加载持仓数据（使用 internal/data）
-func loadPortfolio() Portfolio {
-	portfolio := data.LoadPortfolio()
+// 返回加载的数据和是否发生了数据损坏
+func loadPortfolio() (Portfolio, bool) {
+	portfolio, err := data.LoadPortfolio()
+	corrupted := err != nil
+	if corrupted {
+		logErrorDirect("Portfolio load error: %v", err)
+	}
 	return Portfolio{
 		Stocks: convertStocksFromTypes(portfolio.Stocks),
-	}
+	}, corrupted
 }
 
 // convertStocksToTypes 将 main.Stock 转换为 types.Stock
@@ -75,21 +87,33 @@ func convertStocksFromTypes(stocks []types.Stock) []Stock {
 // ============================================================================
 
 // loadWatchlist 加载自选股票列表（使用 internal/data）
-func loadWatchlist() Watchlist {
-	watchlist := data.LoadWatchlist(api.GetMarketType, isMarketTag)
+// 返回加载的数据和是否发生了数据损坏
+func loadWatchlist() (Watchlist, bool) {
+	watchlist, err := data.LoadWatchlist(api.GetMarketType, isMarketTag)
+	corrupted := err != nil
+	if corrupted {
+		logErrorDirect("Watchlist load error: %v", err)
+	}
 	return Watchlist{
 		Stocks: convertWatchlistStocksFromTypes(watchlist.Stocks),
-	}
+	}, corrupted
 }
 
 // saveWatchlist 保存自选股票列表（使用 internal/data）
+// 如果数据因损坏/不可读而为空，跳过保存以防止覆盖原始数据
 func (m *Model) saveWatchlist() {
+	if m.watchlistCorrupted && len(m.watchlist.Stocks) == 0 {
+		logErrorDirect("Skipping watchlist save: data was corrupted on load and is still empty")
+		return
+	}
 	watchlist := types.Watchlist{
 		Stocks: convertWatchlistStocksToTypes(m.watchlist.Stocks),
 	}
 	if err := data.SaveWatchlist(watchlist); err != nil {
 		logErrorDirect("Failed to save watchlist: %v", err)
+		return
 	}
+	m.watchlistCorrupted = false // 成功保存后清除损坏标记
 }
 
 // convertWatchlistStocksToTypes 将 main.WatchlistStock 转换为 types.WatchlistStock
@@ -140,17 +164,27 @@ func saveConfig(config Config) error {
 // ============================================================================
 
 // loadAlertData 从文件加载告警数据（使用 internal/data）
-func loadAlertData() AlertData {
-	alertData := data.LoadAlertData()
+// 返回加载的数据和是否发生了数据损坏
+func loadAlertData() (AlertData, bool) {
+	alertData, err := data.LoadAlertData()
+	corrupted := err != nil
+	if corrupted {
+		logErrorDirect("Alert data load error: %v", err)
+	}
 	return AlertData{
 		Alerts:     convertAlertsFromTypes(alertData.Alerts),
 		LastCheck:  alertData.LastCheck,
 		AlertCount: alertData.AlertCount,
-	}
+	}, corrupted
 }
 
 // saveAlertData 保存告警数据到文件（使用 internal/data）
+// 如果数据因损坏/不可读而为空，跳过保存以防止覆盖原始数据
 func (m *Model) saveAlertData() {
+	if m.alertDataCorrupted && len(m.alertData.Alerts) == 0 {
+		logErrorDirect("Skipping alert data save: data was corrupted on load and is still empty")
+		return
+	}
 	alertData := types.AlertData{
 		Alerts:     convertAlertsToTypes(m.alertData.Alerts),
 		LastCheck:  m.alertData.LastCheck,
@@ -158,7 +192,9 @@ func (m *Model) saveAlertData() {
 	}
 	if err := data.SaveAlertData(alertData); err != nil {
 		logError("log.alert.saveFailed", err)
+		return
 	}
+	m.alertDataCorrupted = false // 成功保存后清除损坏标记
 }
 
 // convertAlertsToTypes 将 main.Alert 转换为 types.Alert

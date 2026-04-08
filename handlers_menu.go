@@ -24,6 +24,8 @@ func (m *Model) handleMainMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.executeMenuItem()
 	case "q", "ctrl+c":
 		m.savePortfolio()
+		m.saveWatchlist()
+		m.saveAlertData()
 		return m, tea.Quit
 	}
 	return m, nil
@@ -86,7 +88,11 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 		logInfo("log.action.enterAlertManagement")
 		m.state = consts.AlertManage
 		m.alertCursor = 0
-		m.alertData = loadAlertData()
+		alertData, corrupted := loadAlertData()
+		m.alertData = alertData
+		if corrupted {
+			m.alertDataCorrupted = true
+		}
 		return m, nil
 
 	case "sector.title": // 板块行情
@@ -116,6 +122,7 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 		logInfo("log.action.exit")
 		m.savePortfolio()
 		m.saveWatchlist()
+		m.saveAlertData()
 		return m, tea.Quit
 	}
 

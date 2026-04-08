@@ -103,8 +103,9 @@ func main() {
 
 	// 加载配置文件
 	config := loadConfig()
-	portfolio := loadPortfolio()
-	watchlist := loadWatchlist()
+	portfolio, portfolioCorrupted := loadPortfolio()
+	watchlist, watchlistCorrupted := loadWatchlist()
+	alertData, alertDataCorrupted := loadAlertData()
 
 	// 根据配置和是否有股票数据决定初始状态
 	initialState := consts.MainMenu
@@ -148,7 +149,7 @@ func main() {
 		language:           language,
 		maxLines:           config.Display.MaxLines, // 从配置读取每页显示行数
 		lastUpdate:         lastUpdate,
-		alertData:          loadAlertData(), // 启动时加载告警数据
+		alertData:          alertData,          // 启动时加载告警数据
 		portfolioScrollPos: 0,               // 持股列表滚动位置
 		watchlistScrollPos: 0,               // 自选列表滚动位置
 		portfolioCursor:    0,               // 持股列表游标
@@ -162,6 +163,10 @@ func main() {
 		sectorCache:    make(map[types.SectorType]*types.SectorCacheEntry),
 		sectorType:     types.SectorTypeIndustry, // 默认行业板块
 		sectorIsSorted: false,
+		// 数据损坏追踪
+		portfolioCorrupted: portfolioCorrupted,
+		watchlistCorrupted: watchlistCorrupted,
+		alertDataCorrupted: alertDataCorrupted,
 	}
 
 	// 根据语言设置菜单项

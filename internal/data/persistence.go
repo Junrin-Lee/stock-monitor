@@ -53,6 +53,17 @@ func backupCorruptedFile(filePath string, data []byte) {
 	fmt.Fprintf(os.Stderr, "Warning: corrupted file backed up to %s\n", backupPath)
 }
 
+// backupUnreadableFile attempts to preserve an unreadable file via hard link.
+// This handles cases where ReadFile fails due to I/O errors but the file data is intact.
+func backupUnreadableFile(filePath string) {
+	backupPath := filePath + ".unreadable"
+	if err := os.Link(filePath, backupPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not backup unreadable file %s: %v\n", filePath, err)
+	} else {
+		fmt.Fprintf(os.Stderr, "Warning: unreadable file backed up to %s\n", backupPath)
+	}
+}
+
 // ============================================================================
 // Portfolio 持仓数据持久化
 // ============================================================================
@@ -67,19 +78,24 @@ func SavePortfolio(portfolio types.Portfolio) error {
 }
 
 // LoadPortfolio 从文件加载持仓数据
-func LoadPortfolio() types.Portfolio {
+// 返回 error 当文件读取失败（非 ENOENT）或 JSON 解析失败时
+func LoadPortfolio() (types.Portfolio, error) {
 	data, err := os.ReadFile(consts.DataFile)
 	if err != nil {
-		return types.Portfolio{Stocks: []types.Stock{}}
+		if os.IsNotExist(err) {
+			return types.Portfolio{Stocks: []types.Stock{}}, nil // 文件不存在是正常的首次运行
+		}
+		backupUnreadableFile(consts.DataFile)
+		return types.Portfolio{Stocks: []types.Stock{}}, fmt.Errorf("read portfolio file: %w", err)
 	}
 
 	var portfolio types.Portfolio
 	err = json.Unmarshal(data, &portfolio)
 	if err != nil {
 		backupCorruptedFile(consts.DataFile, data)
-		return types.Portfolio{Stocks: []types.Stock{}}
+		return types.Portfolio{Stocks: []types.Stock{}}, fmt.Errorf("portfolio data corrupted: %w", err)
 	}
-	return portfolio
+	return portfolio, nil
 }
 
 // ============================================================================
@@ -109,10 +125,15 @@ type MarketTagChecker func(tag string) bool
 // LoadWatchlist 加载自选股票列表（支持旧格式迁移）
 // marketDetector: 用于检测股票市场类型的函数
 // marketTagChecker: 用于检查是否为市场标签的函数
-func LoadWatchlist(marketDetector MarketDetector, marketTagChecker MarketTagChecker) types.Watchlist {
+// 返回 error 当 JSON 解析失败时（文件不存在不算错误）
+func LoadWatchlist(marketDetector MarketDetector, marketTagChecker MarketTagChecker) (types.Watchlist, error) {
 	data, err := os.ReadFile(consts.WatchlistFile)
 	if err != nil {
-		return types.Watchlist{Stocks: []types.WatchlistStock{}}
+		if os.IsNotExist(err) {
+			return types.Watchlist{Stocks: []types.WatchlistStock{}}, nil
+		}
+		backupUnreadableFile(consts.WatchlistFile)
+		return types.Watchlist{Stocks: []types.WatchlistStock{}}, fmt.Errorf("read watchlist file: %w", err)
 	}
 
 	// 先尝试用兼容性结构体加载数据
@@ -120,7 +141,7 @@ func LoadWatchlist(marketDetector MarketDetector, marketTagChecker MarketTagChec
 	err = json.Unmarshal(data, &legacyWatchlist)
 	if err != nil {
 		backupCorruptedFile(consts.WatchlistFile, data)
-		return types.Watchlist{Stocks: []types.WatchlistStock{}}
+		return types.Watchlist{Stocks: []types.WatchlistStock{}}, fmt.Errorf("watchlist data corrupted: %w", err)
 	}
 
 	// 转换为新格式
@@ -164,7 +185,7 @@ func LoadWatchlist(marketDetector MarketDetector, marketTagChecker MarketTagChec
 		watchlist.Stocks = append(watchlist.Stocks, newStock)
 	}
 
-	return watchlist
+	return watchlist, nil
 }
 
 // SaveWatchlist 保存自选股票列表（原子写）
@@ -430,14 +451,23 @@ func MigrateAlertFrequency(alerts []types.Alert) []types.Alert {
 }
 
 // LoadAlertData 从文件加载告警数据
-func LoadAlertData() types.AlertData {
+// 返回 error 当 JSON 解析失败时（文件不存在不算错误）
+func LoadAlertData() (types.AlertData, error) {
 	data, err := os.ReadFile(consts.AlertFile)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return types.AlertData{
+				Alerts:     []types.Alert{},
+				LastCheck:  "",
+				AlertCount: 0,
+			}, nil
+		}
+		backupUnreadableFile(consts.AlertFile)
 		return types.AlertData{
 			Alerts:     []types.Alert{},
 			LastCheck:  "",
 			AlertCount: 0,
-		}
+		}, fmt.Errorf("read alert file: %w", err)
 	}
 
 	var alertData types.AlertData
@@ -448,13 +478,13 @@ func LoadAlertData() types.AlertData {
 			Alerts:     []types.Alert{},
 			LastCheck:  "",
 			AlertCount: 0,
-		}
+		}, fmt.Errorf("alert data corrupted: %w", err)
 	}
 
 	// 迁移旧数据到新的频率格式
 	alertData.Alerts = MigrateAlertFrequency(alertData.Alerts)
 
-	return alertData
+	return alertData, nil
 }
 
 // SaveAlertData 保存告警数据到文件（原子写）

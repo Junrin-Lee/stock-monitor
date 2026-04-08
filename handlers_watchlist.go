@@ -1352,7 +1352,11 @@ func (m *Model) handleWatchlistSorting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.watchlistSortField = consts.SortByCode  // Reset to default
 		m.watchlistSortDirection = consts.SortAsc // Reset to default
 		// Reload original data order
-		m.watchlist = loadWatchlist()
+		wl, corrupted := loadWatchlist()
+		m.watchlist = wl
+		if corrupted {
+			m.watchlistCorrupted = true
+		}
 		m.resetWatchlistCursor()
 		// Return to watchlist page
 		m.state = consts.WatchlistViewing
