@@ -167,6 +167,21 @@ func (c *StockPriceCache) Size() int {
 	return len(c.cache)
 }
 
+// EvictExpired 删除所有过期的缓存条目，防止内存无限增长
+func (c *StockPriceCache) EvictExpired() int {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	evicted := 0
+	for symbol, entry := range c.cache {
+		if time.Since(entry.UpdateTime) >= c.ttl && !entry.IsUpdating {
+			delete(c.cache, symbol)
+			evicted++
+		}
+	}
+	return evicted
+}
+
 // GetValidCount 获取有效（未过期）的缓存条目数量
 func (c *StockPriceCache) GetValidCount() int {
 	c.mutex.RLock()

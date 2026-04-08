@@ -129,6 +129,14 @@ func (m *Model) getSparklineForStock(code string) string {
 	m.sparklineCache[code] = result
 	m.sparklineCacheTime[code] = time.Now()
 
+	// 驱逐过期条目，防止内存无限增长
+	for k, t := range m.sparklineCacheTime {
+		if time.Since(t) >= ttl*3 {
+			delete(m.sparklineCache, k)
+			delete(m.sparklineCacheTime, k)
+		}
+	}
+
 	return result
 }
 
