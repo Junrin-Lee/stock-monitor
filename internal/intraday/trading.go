@@ -54,14 +54,19 @@ func GetTradingState(now time.Time, marketType string) types.TradingState {
 		morningEnd = afternoonEnd     // 无午休
 		afternoonStart = morningStart // 无午休
 
-	case "hongkong": // 港股: 09:30-12:00, 13:00-16:00 HKT（含集合竞价 09:00-09:30）
+	case "hongkong": // 港股: 09:30-12:00, 13:00-16:00 HKT（含集合竞价 09:00-09:30, 收盘竞价 16:00-16:10）
 		auctionStart := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, now.Location())
 		morningStart = time.Date(now.Year(), now.Month(), now.Day(), 9, 30, 0, 0, now.Location())
 		morningEnd = time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
 		afternoonStart = time.Date(now.Year(), now.Month(), now.Day(), 13, 0, 0, 0, now.Location())
 		afternoonEnd = time.Date(now.Year(), now.Month(), now.Day(), 16, 0, 0, 0, now.Location())
-		// 竞价时段判断（含整点）
+		casEnd := time.Date(now.Year(), now.Month(), now.Day(), 16, 10, 0, 0, now.Location())
+		// 开盘竞价时段（09:00-09:30）
 		if !now.Before(auctionStart) && now.Before(morningStart) {
+			return types.TradingStateAuction
+		}
+		// 收盘竞价时段 CAS（16:00-16:10）
+		if !now.Before(afternoonEnd) && now.Before(casEnd) {
 			return types.TradingStateAuction
 		}
 

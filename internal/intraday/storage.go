@@ -196,7 +196,7 @@ func GetExpectedDatapoints(marketType string, isLiveMode bool) int {
 		return 390 // 6.5小时 × 60分钟
 
 	case "hongkong":
-		return 330 // 5.5小时 × 60分钟
+		return 340 // 5.5小时 × 60分钟 + CAS 10分钟
 
 	default:
 		return 240 // 默认使用 A股 标准
