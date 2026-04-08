@@ -134,7 +134,7 @@ func tryGetIntradayFromSina(stockCode string) ([]IntradayDataPoint, error) {
 
 	// Build URL
 	url := fmt.Sprintf(
-		"http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=%s&scale=1&datalen=250",
+		"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=%s&scale=1&datalen=250",
 		sinaCode,
 	)
 
@@ -285,7 +285,7 @@ func tryGetIntradayFromTencent(stockCode string) ([]IntradayDataPoint, error) {
 	// Build URL - Tencent minute data API (JSONP format)
 	// Response format: min_data_sh601138={"code":0,"data":{"sh601138":{"data":{"data":["0930 60.88 10989 66901032.00",...]}}}}
 	url := fmt.Sprintf(
-		"http://ifzq.gtimg.cn/appstock/app/minute/query?_var=min_data_%s&code=%s",
+		"https://ifzq.gtimg.cn/appstock/app/minute/query?_var=min_data_%s&code=%s",
 		tencentCode, tencentCode,
 	)
 
@@ -460,6 +460,18 @@ func tryGetIntradayFromYahoo(stockCode string) ([]IntradayDataPoint, error) {
 	// Convert timestamps and prices to IntradayDataPoint
 	datapoints := make([]IntradayDataPoint, 0, len(timestamps))
 
+	// Pre-load timezone once outside the loop
+	marketStr := string(api.GetMarketType(stockCode))
+	var marketLocation *time.Location
+	switch marketStr {
+	case "us":
+		marketLocation, _ = time.LoadLocation("America/New_York")
+	case "hongkong":
+		marketLocation, _ = time.LoadLocation("Asia/Hong_Kong")
+	default:
+		marketLocation = time.Local
+	}
+
 	for i, timestamp := range timestamps {
 		// Skip if we don't have a price for this timestamp
 		if i >= len(closePrices) {
@@ -474,23 +486,8 @@ func tryGetIntradayFromYahoo(stockCode string) ([]IntradayDataPoint, error) {
 
 		// Convert Unix timestamp to time
 		t := time.Unix(timestamp, 0)
-
-		// Format time as "HH:MM" in local market timezone
-		// Yahoo returns timestamps in UTC, need to convert to market time
-		market := string(api.GetMarketType(stockCode))
-		var location *time.Location
-
-		switch market {
-		case "us":
-			location, _ = time.LoadLocation("America/New_York")
-		case "hongkong":
-			location, _ = time.LoadLocation("Asia/Hong_Kong")
-		default:
-			location = time.Local
-		}
-
-		if location != nil {
-			t = t.In(location)
+		if marketLocation != nil {
+			t = t.In(marketLocation)
 		}
 
 		timeStr := t.Format("15:04") // HH:MM format

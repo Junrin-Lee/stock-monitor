@@ -83,7 +83,7 @@ func Downsample(prices []float64, targetWidth int) []float64 {
 
 // downsample 内部等距采样实现
 func downsample(prices []float64, targetWidth int) []float64 {
-	if len(prices) <= targetWidth {
+	if targetWidth <= 1 || len(prices) <= targetWidth {
 		return prices
 	}
 	result := make([]float64, targetWidth)

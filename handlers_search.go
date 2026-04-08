@@ -36,7 +36,12 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		if m.searchInput == "" {
-			m.message = m.getText("enterSearch")[:len(m.getText("enterSearch"))-2] // Remove ": " suffix
+			runes := []rune(m.getText("enterSearch"))
+			if len(runes) >= 2 {
+				m.message = string(runes[:len(runes)-2]) // Remove ": " suffix (rune-safe)
+			} else {
+				m.message = m.getText("enterSearch")
+			}
 			return m, nil
 		}
 		logInfo("搜索股票: %s", m.searchInput)

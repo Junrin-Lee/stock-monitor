@@ -217,11 +217,17 @@ func (m *Model) loadMultiDayChartData(days int) {
 // location: 市场时区（用于正确解析时间）
 func parseIntradayTime(date string, timeStr string, location *time.Location) time.Time {
 	// date = "20251130", timeStr = "09:31"
+	if len(date) < 8 {
+		return time.Time{}
+	}
 	year, _ := strconv.Atoi(date[:4])
 	month, _ := strconv.Atoi(date[4:6])
 	day, _ := strconv.Atoi(date[6:8])
 
 	parts := strings.Split(timeStr, ":")
+	if len(parts) < 2 {
+		return time.Time{}
+	}
 	hour, _ := strconv.Atoi(parts[0])
 	minute, _ := strconv.Atoi(parts[1])
 
@@ -1183,7 +1189,7 @@ func (m *Model) runSearchIntradayWorker(code, name, date string, prevClose float
 			m.searchIntradayMu.RLock()
 			stillSearchMode := m.isSearchMode
 			m.searchIntradayMu.RUnlock()
-			if !stillSearchMode || m.state != consts.SearchResultWithActions {
+			if !stillSearchMode {
 				logDebug("log.search.workerAutoStop", code)
 				return
 			}
