@@ -46,6 +46,13 @@ func atomicWriteFile(filePath string, data []byte, perm os.FileMode) error {
 	return nil
 }
 
+// backupCorruptedFile saves a corrupted file with a .corrupt suffix to prevent data loss.
+func backupCorruptedFile(filePath string, data []byte) {
+	backupPath := filePath + ".corrupt"
+	_ = os.WriteFile(backupPath, data, 0644)
+	fmt.Fprintf(os.Stderr, "Warning: corrupted file backed up to %s\n", backupPath)
+}
+
 // ============================================================================
 // Portfolio 持仓数据持久化
 // ============================================================================
@@ -69,6 +76,7 @@ func LoadPortfolio() types.Portfolio {
 	var portfolio types.Portfolio
 	err = json.Unmarshal(data, &portfolio)
 	if err != nil {
+		backupCorruptedFile(consts.DataFile, data)
 		return types.Portfolio{Stocks: []types.Stock{}}
 	}
 	return portfolio
@@ -111,6 +119,7 @@ func LoadWatchlist(marketDetector MarketDetector, marketTagChecker MarketTagChec
 	var legacyWatchlist WatchlistLegacy
 	err = json.Unmarshal(data, &legacyWatchlist)
 	if err != nil {
+		backupCorruptedFile(consts.WatchlistFile, data)
 		return types.Watchlist{Stocks: []types.WatchlistStock{}}
 	}
 
@@ -257,8 +266,13 @@ func LoadConfig() types.Config {
 	var config types.Config
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
-		// 如果配置文件格式错误，使用默认配置
+		backupCorruptedFile(consts.ConfigFile, data)
 		return GetDefaultConfig()
+	}
+
+	// 验证刷新间隔
+	if config.Update.RefreshInterval < 1 {
+		config.Update.RefreshInterval = 5
 	}
 
 	// 验证配置的合理性
@@ -429,6 +443,7 @@ func LoadAlertData() types.AlertData {
 	var alertData types.AlertData
 	err = json.Unmarshal(data, &alertData)
 	if err != nil {
+		backupCorruptedFile(consts.AlertFile, data)
 		return types.AlertData{
 			Alerts:     []types.Alert{},
 			LastCheck:  "",
