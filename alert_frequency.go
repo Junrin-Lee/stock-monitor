@@ -7,6 +7,7 @@ import (
 	"github.com/dromara/carbon/v2"
 
 	internalAlert "stock-monitor/internal/alert"
+	"stock-monitor/internal/api"
 	"stock-monitor/internal/types"
 )
 
@@ -29,7 +30,8 @@ func canTriggerInCurrentPeriod(alert Alert) bool {
 		LastChecked:   alert.LastChecked,
 		BatchTag:      alert.BatchTag,
 	}
-	return internalAlert.CanTriggerInCurrentPeriod(typesAlert)
+	timezone := getMarketTimezone(alert.StockCode)
+	return internalAlert.CanTriggerInCurrentPeriod(typesAlert, timezone)
 }
 
 // isSameDay 判断两个时间是否是同一天
@@ -66,6 +68,20 @@ func getNextTriggerTime(alert Alert) time.Time {
 		BatchTag:      alert.BatchTag,
 	}
 	return internalAlert.GetNextTriggerTime(typesAlert)
+}
+
+// getMarketTimezone 根据股票代码返回对应市场的 IANA 时区字符串
+func getMarketTimezone(stockCode string) string {
+	switch api.GetMarketType(stockCode) {
+	case types.MarketChina:
+		return "Asia/Shanghai"
+	case types.MarketHongKong:
+		return "Asia/Hong_Kong"
+	case types.MarketUS:
+		return "America/New_York"
+	default:
+		return "" // 使用本地时区
+	}
 }
 
 // getFrequencyDisplayText 获取频率的显示文本

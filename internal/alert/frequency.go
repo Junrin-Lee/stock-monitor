@@ -10,14 +10,21 @@ import (
 
 // CanTriggerInCurrentPeriod 检查告警是否可以在当前周期触发
 // 返回 true 表示距离上次触发已经过了足够的时间，可以再次触发
-func CanTriggerInCurrentPeriod(alert types.Alert) bool {
+// timezone: 市场时区（IANA 格式，如 "Asia/Shanghai"），空字符串使用本地时区
+func CanTriggerInCurrentPeriod(alert types.Alert, timezone string) bool {
 	// 如果从未触发过，允许触发
 	if alert.TriggeredAt.IsZero() {
 		return true
 	}
 
 	now := carbon.Now()
+	if timezone != "" {
+		now = now.SetTimezone(timezone)
+	}
 	lastTriggered := carbon.CreateFromStdTime(alert.TriggeredAt)
+	if timezone != "" {
+		lastTriggered = lastTriggered.SetTimezone(timezone)
+	}
 
 	switch alert.Frequency {
 	case types.TriggerOnce:
