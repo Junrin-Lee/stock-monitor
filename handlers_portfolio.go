@@ -377,15 +377,15 @@ func (m *Model) processAddingStep() (tea.Model, tea.Cmd) {
 		// Use search functionality
 		var stockData *StockData
 		if api.ContainsChineseChars(m.input) {
-			stockData = convertStockData(api.SearchChineseStock(m.input))
+			stockData = api.SearchChineseStock(m.input)
 		} else {
 			// For non-consts.Chinese input, try direct price fetch first, then search
-			stockData = convertStockData(api.GetStockPrice(m.input))
+			stockData = api.GetStockPrice(m.input)
 
 			// If direct fetch fails, try as search keyword
 			if stockData == nil || stockData.Price <= 0 {
 				logWarn("log.api.addStockFail", m.input)
-				stockData = convertStockData(api.SearchStockBySymbol(m.input))
+				stockData = api.SearchStockBySymbol(m.input)
 			}
 		}
 

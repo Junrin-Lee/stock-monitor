@@ -34,26 +34,6 @@ var (
 // 使用 atomic.Pointer 保证后台 goroutine 读取与主线程写入的并发安全
 var globalModel atomic.Pointer[Model]
 
-// convertStockData converts types.StockData to main.StockData
-func convertStockData(data *types.StockData) *StockData {
-	if data == nil {
-		return nil
-	}
-	return &StockData{
-		Symbol:        data.Symbol,
-		Name:          data.Name,
-		Price:         data.Price,
-		Change:        data.Change,
-		ChangePercent: data.ChangePercent,
-		StartPrice:    data.StartPrice,
-		MaxPrice:      data.MaxPrice,
-		MinPrice:      data.MinPrice,
-		PrevClose:     data.PrevClose,
-		TurnoverRate:  data.TurnoverRate,
-		Volume:        data.Volume,
-	}
-}
-
 // 获取主菜单项
 // i18n 相关函数已移动到 i18n.go
 

@@ -3,31 +3,10 @@ package main
 import (
 	"fmt"
 	"stock-monitor/internal/api"
-	"stock-monitor/internal/types"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
-
-// convertStockDataToMain converts types.StockData to main.StockData
-func convertStockDataToMain(data *types.StockData) *StockData {
-	if data == nil {
-		return nil
-	}
-	return &StockData{
-		Symbol:        data.Symbol,
-		Name:          data.Name,
-		Price:         data.Price,
-		Change:        data.Change,
-		ChangePercent: data.ChangePercent,
-		StartPrice:    data.StartPrice,
-		MaxPrice:      data.MaxPrice,
-		MinPrice:      data.MinPrice,
-		PrevClose:     data.PrevClose,
-		TurnoverRate:  data.TurnoverRate,
-		Volume:        data.Volume,
-	}
-}
 
 // ============================================================================
 // 股价缓存管理
@@ -145,7 +124,7 @@ func fetchStockPriceCmd(symbol string) tea.Cmd {
 		// 返回消息，由 Update() 方法处理
 		return stockPriceUpdateMsg{
 			Symbol: symbol,
-			Data:   convertStockDataToMain(data),
+			Data:   data,
 			Error:  err,
 		}
 	}

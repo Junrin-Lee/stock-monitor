@@ -46,7 +46,7 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		logInfo("搜索股票: %s", m.searchInput)
 		m.message = m.getText("searching")
-		m.searchResult = convertStockData(api.GetStockInfo(m.searchInput))
+		m.searchResult = api.GetStockInfo(m.searchInput)
 		if m.searchResult == nil || m.searchResult.Name == "" {
 			logInfo("搜索失败: %s", m.searchInput)
 			m.message = fmt.Sprintf(m.getText("searchNotFound"), m.searchInput)

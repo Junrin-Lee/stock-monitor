@@ -8,17 +8,6 @@ import (
 	"stock-monitor/internal/types"
 )
 
-// ConvertStockDataToInternal converts main package StockData to internal types.StockData
-// This is a temporary bridge function until full refactoring is complete
-func ConvertFromInternalStockData(data *types.StockData) interface{} {
-	if data == nil {
-		return nil
-	}
-	// Return as-is since the API already returns types.StockData
-	// The calling code will need to do type conversion
-	return data
-}
-
 // GetStockInfo 获取股票信息（支持中英文搜索）
 func GetStockInfo(symbol string) *types.StockData {
 	var stockData *types.StockData
