@@ -135,9 +135,14 @@ func (m *Model) loadIntradayDataForDate(code, name, date string) (*IntradayData,
 		logDebug("log.chart.prevCloseMissing", code)
 		data.PrevClose = m.fetchPrevCloseForStock(code)
 
-		// 可选：异步保存更新后的数据（非阻塞，忽略错误）
+		// 可选：异步保存更新后的数据（非阻塞）
 		if data.PrevClose > 0 {
-			go intraday.SaveIntradayData(filePath, &data)
+			dataCopy := data
+			go func() {
+				if err := intraday.SaveIntradayData(filePath, &dataCopy); err != nil {
+					logDebug("log.chart.savePrevCloseFail", code, err)
+				}
+			}()
 		}
 	} else {
 		logDebug("log.chart.prevCloseExists", code, data.PrevClose)
