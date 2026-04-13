@@ -49,7 +49,10 @@ func atomicWriteFile(filePath string, data []byte, perm os.FileMode) error {
 // backupCorruptedFile saves a corrupted file with a .corrupt suffix to prevent data loss.
 func backupCorruptedFile(filePath string, data []byte) {
 	backupPath := filePath + ".corrupt"
-	_ = os.WriteFile(backupPath, data, 0644)
+	if err := os.WriteFile(backupPath, data, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to backup corrupted file %s: %v\n", filePath, err)
+		return
+	}
 	fmt.Fprintf(os.Stderr, "Warning: corrupted file backed up to %s\n", backupPath)
 }
 
