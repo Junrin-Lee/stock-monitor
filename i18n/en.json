@@ -125,6 +125,13 @@
   "terminalTooSmall": "Terminal window too small",
   "pleaseResize": "Please resize to at least 80x25",
   "tradingSession": "Trading Session",
+  "periodIntraday": "Intraday",
+  "periodDaily": "Daily",
+  "periodWeekly": "Weekly",
+  "periodMonthly": "Monthly",
+  "periodQuarterly": "Quarterly",
+  "periodYearly": "Yearly",
+  "kLineChart": "K-Line Chart",
 
   "log.action.prefix": "User Action:",
   "log.action.enterPortfolio": "Entered portfolio view",

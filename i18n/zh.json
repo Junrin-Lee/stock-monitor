@@ -125,6 +125,13 @@
   "terminalTooSmall": "终端窗口太小",
   "pleaseResize": "请调整窗口大小至至少 80x25",
   "tradingSession": "交易时段",
+  "periodIntraday": "分时",
+  "periodDaily": "日K",
+  "periodWeekly": "周K",
+  "periodMonthly": "月K",
+  "periodQuarterly": "季K",
+  "periodYearly": "年K",
+  "kLineChart": "K线图表",
 
   "log.action.prefix": "用户操作:",
   "log.action.enterPortfolio": "进入持股监控页面",

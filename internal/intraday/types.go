@@ -26,6 +26,19 @@ type DatapointDiffResult struct {
 	NewEntryCount    int  // 新时间点数量
 }
 
+// DailyClosePoint 表示单个交易日的收盘价（从分时数据文件提取）
+type DailyClosePoint struct {
+	Date  string  // YYYYMMDD
+	Close float64 // 收盘价（当日最后一个 datapoint 的 Price）
+}
+
+// AggregatedPoint 表示聚合后的单个数据点（用于日K/周K/月K等图表）
+type AggregatedPoint struct {
+	Label string  // X轴显示标签（日线: "03/15", 月线: "2026/03" 等）
+	Close float64 // 聚合后的收盘价
+	Date  string  // 代表日期 YYYYMMDD
+}
+
 // SaveDecision 表示保存决策
 type SaveDecision int
 

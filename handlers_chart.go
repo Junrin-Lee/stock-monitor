@@ -214,6 +214,64 @@ func (m *Model) loadMultiDayChartData(days int) {
 	m.chartLoadError = nil
 }
 
+// loadAggregatedChartData 加载聚合K线数据（日K/周K/月K/季K/年K）
+// period: "D"=日线, "W"=周线, "M"=月线, "Q"=季线, "Y"=年线
+// maxDays: 从本地分时文件中最多读取的交易日数
+func (m *Model) loadAggregatedChartData(period string, maxDays int) {
+	dailyCloses, err := intraday.LoadDailyClosingPrices(m.chartViewStock, maxDays)
+	if err != nil || len(dailyCloses) == 0 {
+		m.chartLoadError = fmt.Errorf("no daily data available")
+		return
+	}
+
+	var points []intraday.AggregatedPoint
+	switch period {
+	case "D":
+		// 日线：每个 DailyClosePoint 直接转为一个 AggregatedPoint
+		points = make([]intraday.AggregatedPoint, len(dailyCloses))
+		for i, dc := range dailyCloses {
+			label := dc.Date[4:6] + "/" + dc.Date[6:8] // MM/DD
+			points[i] = intraday.AggregatedPoint{Label: label, Close: dc.Close, Date: dc.Date}
+		}
+	case "W":
+		points = intraday.AggregateWeekly(dailyCloses)
+	case "M":
+		points = intraday.AggregateMonthly(dailyCloses)
+	case "Q":
+		points = intraday.AggregateQuarterly(dailyCloses)
+	case "Y":
+		points = intraday.AggregateYearly(dailyCloses)
+	}
+
+	if len(points) == 0 {
+		m.chartLoadError = fmt.Errorf("insufficient data for %s aggregation", period)
+		return
+	}
+
+	// 转为 IntradayData 格式以复用现有图表渲染
+	datapoints := make([]IntradayDataPoint, len(points))
+	dates := make([]string, len(points))
+	for i, p := range points {
+		datapoints[i] = IntradayDataPoint{Time: p.Label, Price: p.Close}
+		dates[i] = p.Date
+	}
+
+	m.chartData = &IntradayData{
+		Code:       m.chartViewStock,
+		Name:       m.chartViewStockName,
+		Market:     string(api.GetMarketType(m.chartViewStock)),
+		Datapoints: datapoints,
+	}
+	m.chartMultiDayDates = dates
+	// 聚合模式：每个点独立，bounds 为 0..N-1
+	bounds := make([]int, len(points))
+	for i := range bounds {
+		bounds[i] = i
+	}
+	m.chartMultiDayBounds = bounds
+	m.chartLoadError = nil
+}
+
 // parseIntradayTime 解析分时时间字符串 ("09:31") + 日期 ("20251130") → time.Time
 // location: 市场时区（用于正确解析时间）
 func parseIntradayTime(date string, timeStr string, location *time.Location) time.Time {
@@ -474,9 +532,9 @@ func (m *Model) createIntradayChart(termWidth, termHeight int) *linechart.Model 
 	var dataPoints []float64
 	var timeLabels []string
 
-	isMultiDay := m.chartPeriod != "" && m.chartPeriod != "1D"
-	if isMultiDay {
-		// 多日模式：降采样后的数据点使用合成时间 key，无法匹配单日时间框架，直接使用
+	isAggregated := m.chartPeriod != ""
+	if isAggregated {
+		// 聚合模式（日K/周K/月K等）：数据点的 Time 字段已包含 X 轴标签，直接使用
 		dataPoints = make([]float64, len(m.chartData.Datapoints))
 		timeLabels = make([]string, len(m.chartData.Datapoints))
 		for i, dp := range m.chartData.Datapoints {
@@ -530,13 +588,19 @@ func (m *Model) createIntradayChart(termWidth, termHeight int) *linechart.Model 
 
 	// 设置样式：A股红涨绿跌，非A股绿涨红跌
 	lastPrice := m.chartData.Datapoints[len(m.chartData.Datapoints)-1].Price
-	prevClose := m.chartData.PrevClose // 使用昨日收盘价
 
-	// 降级方案：如果 prevClose 不可用，回退到开盘价（保持现有行为）
-	comparisonBase := prevClose
-	if comparisonBase == 0 {
-		comparisonBase = m.chartData.Datapoints[0].Price // 降级到开盘价
-		logDebug("log.chart.colorFallback", m.chartData.Code)
+	var comparisonBase float64
+	if isAggregated {
+		// 聚合模式：用首个数据点作为比较基准（无 PrevClose）
+		comparisonBase = m.chartData.Datapoints[0].Price
+	} else {
+		// 分时模式：使用昨日收盘价
+		prevClose := m.chartData.PrevClose
+		comparisonBase = prevClose
+		if comparisonBase == 0 {
+			comparisonBase = m.chartData.Datapoints[0].Price // 降级到开盘价
+			logDebug("log.chart.colorFallback", m.chartData.Code)
+		}
 	}
 
 	// 判断是否为A股（SH/SZ开头）
@@ -578,53 +642,22 @@ func (m *Model) createIntradayChart(termWidth, termHeight int) *linechart.Model 
 	// === 创建自定义 X 轴标签格式化器 ===
 	var xLabelFormatter func(int, float64) string
 
-	if isMultiDay && len(m.chartMultiDayDates) > 0 {
-		// 多日模式：按各日实际数据点占比映射日期标签（MM/DD）
-		dates := m.chartMultiDayDates
-		bounds := m.chartMultiDayBounds
-		totalPoints := len(dataPoints)
-		xSteps := 8 // 与 WithXYSteps(8, 5) 保持一致
+	if isAggregated {
+		// 聚合模式（日K/周K/月K等）：每个数据点的 Time 已包含标签，等间隔显示
+		totalPoints := len(timeLabels)
+		step := totalPoints / 8
+		if step < 1 {
+			step = 1
+		}
 		xLabelFormatter = func(index int, value float64) string {
 			idx := int(math.Round(value))
 			if idx < 0 || idx >= totalPoints {
 				return ""
 			}
-			// 用日期边界反查当前索引所属日期
-			dateIdx := 0
-			for i := len(bounds) - 1; i >= 0; i-- {
-				if idx >= bounds[i] {
-					dateIdx = i
-					break
-				}
+			if idx%step == 0 || idx == totalPoints-1 {
+				return timeLabels[idx]
 			}
-			if dateIdx >= len(dates) {
-				dateIdx = len(dates) - 1
-			}
-			// 无状态去重：基于 tick 间隔检测日期变化
-			// 用 index 参数计算前一 tick 的近似位置，判断是否跨越了日期边界
-			// 纯函数——不受 ntcharts 投机性调用影响
-			if index > 0 {
-				prevTickValue := float64(index-1) * float64(totalPoints-1) / float64(xSteps)
-				prevIdx := int(math.Round(prevTickValue))
-				if prevIdx < 0 {
-					prevIdx = 0
-				}
-				prevDateIdx := 0
-				for i := len(bounds) - 1; i >= 0; i-- {
-					if prevIdx >= bounds[i] {
-						prevDateIdx = i
-						break
-					}
-				}
-				if dateIdx == prevDateIdx {
-					return ""
-				}
-			}
-			date := dates[dateIdx]
-			if len(date) == 8 {
-				return date[4:6] + "/" + date[6:8]
-			}
-			return date
+			return ""
 		}
 	} else {
 		// 单日模式：只在关键时间点显示标签（开盘、午休、午盘、收盘）
@@ -734,8 +767,8 @@ func (m *Model) triggerIntradayDataCollection(code, name, date string) tea.Cmd {
 // handleIntradayChartViewing 处理分时图表查看状态的键盘事件
 func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q":
-		// 返回上一个状态
+	case "esc":
+		// 返回上一个状态（仅 ESC 退出，q 已改为季K线快捷键）
 		m.state = m.previousState
 		m.chartData = nil
 		m.chartPeriod = "" // 重置周期
@@ -755,12 +788,12 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 
 		return m, nil
 
-	case "1":
-		// 切换到单日视图（默认模式）
-		m.chartPeriod = "1D"
+	case "t":
+		// 分时模式：今日分钟级数据（T = Today）
+		m.chartPeriod = ""
 		m.chartMultiDayDates = nil
 		m.chartMultiDayBounds = nil
-		// 重新加载当日数据
+		// 重新加载当日分时数据
 		data, err := m.loadIntradayDataForDate(m.chartViewStock, m.chartViewStockName, m.chartViewDate)
 		if err == nil {
 			m.chartData = data
@@ -768,32 +801,41 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		}
 		return m, nil
 
-	case "5":
-		// 切换到 5 日视图
-		m.chartPeriod = "5D"
-		m.loadMultiDayChartData(5)
+	case "d":
+		// 日K线（D = Daily）：每天收盘价，最多60个交易日
+		m.chartPeriod = "D"
+		m.loadAggregatedChartData("D", 60)
+		return m, nil
+
+	case "w":
+		// 周K线（W = Weekly）：每5个交易日聚合，加载约260天数据
+		m.chartPeriod = "W"
+		m.loadAggregatedChartData("W", 260)
 		return m, nil
 
 	case "m":
-		// 切换到 1 月视图（约 22 个交易日）
-		m.chartPeriod = "1M"
-		m.loadMultiDayChartData(22)
+		// 月K线（M = Monthly）：按自然月聚合，加载约500天数据
+		m.chartPeriod = "M"
+		m.loadAggregatedChartData("M", 500)
 		return m, nil
 
-	case "3":
-		// 切换到 3 月视图（约 66 个交易日）
-		m.chartPeriod = "3M"
-		m.loadMultiDayChartData(66)
+	case "q":
+		// 季K线（Q = Quarterly）：按季度聚合
+		m.chartPeriod = "Q"
+		m.loadAggregatedChartData("Q", 1000)
 		return m, nil
 
 	case "y":
-		// 切换到 1 年视图（约 252 个交易日）
-		m.chartPeriod = "1Y"
-		m.loadMultiDayChartData(252)
+		// 年K线（Y = Yearly）：按年聚合
+		m.chartPeriod = "Y"
+		m.loadAggregatedChartData("Y", 2000)
 		return m, nil
 
 	case "left":
-		// 导航到前一个交易日（跳过周末）
+		// 导航到前一个交易日（仅分时模式，聚合模式下无效）
+		if m.chartPeriod != "" {
+			return m, nil
+		}
 		if m.chartData != nil {
 			newDateStr := findPreviousTradingDay(m.chartViewStock, m.chartViewDate, m)
 
@@ -826,7 +868,10 @@ func (m *Model) handleIntradayChartViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 
 	case "right":
-		// 导航到下一个交易日（跳过周末和节假日，最多到市场时区的今天）
+		// 导航到下一个交易日（仅分时模式，聚合模式下无效）
+		if m.chartPeriod != "" {
+			return m, nil
+		}
 		if m.chartData != nil {
 			marketType := string(api.GetMarketType(m.chartViewStock))
 			loc, locErr := intraday.GetMarketLocation(marketType)
@@ -952,44 +997,53 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 		}
 	}
 
-	// 图表标题：多周期模式显示数据范围，单日模式显示具体日期
+	// 图表标题：聚合模式显示K线类型和数据范围，分时模式显示具体日期
 	var titleDateStr string
-	if m.chartPeriod != "" && m.chartPeriod != "1D" && len(m.chartMultiDayDates) >= 2 {
-		firstDate := m.chartMultiDayDates[0]                            // 最旧的日期（升序）
-		lastDate := m.chartMultiDayDates[len(m.chartMultiDayDates)-1] // 最新的日期（升序）
-		titleDateStr = fmt.Sprintf("[%s] %s ~ %s (%d天)",
-			m.chartPeriod,
+	var chartTitle string
+	if m.chartPeriod != "" && len(m.chartMultiDayDates) >= 2 {
+		// 聚合模式：显示周期名称和日期范围
+		periodName := m.getChartPeriodName()
+		firstDate := m.chartMultiDayDates[0]
+		lastDate := m.chartMultiDayDates[len(m.chartMultiDayDates)-1]
+		titleDateStr = fmt.Sprintf("[%s] %s ~ %s (%d)",
+			periodName,
 			formatDate(firstDate),
 			formatDate(lastDate),
 			len(m.chartMultiDayDates))
-	} else if m.chartPeriod != "" && m.chartPeriod != "1D" && len(m.chartMultiDayDates) == 1 {
-		titleDateStr = fmt.Sprintf("[%s] %s", m.chartPeriod, formatDate(m.chartMultiDayDates[0]))
+		chartTitle = m.getText("kLineChart")
+	} else if m.chartPeriod != "" && len(m.chartMultiDayDates) == 1 {
+		periodName := m.getChartPeriodName()
+		titleDateStr = fmt.Sprintf("[%s] %s", periodName, formatDate(m.chartMultiDayDates[0]))
+		chartTitle = m.getText("kLineChart")
 	} else {
 		titleDateStr = formatDate(m.chartViewDate)
+		chartTitle = m.getText("intradayChart")
 	}
 
 	b.WriteString(lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("14")). // 青色
 		Render(fmt.Sprintf("📈 %s [%s] - %s (%s) - %s",
-			m.getText("intradayChart"),
+			chartTitle,
 			marketLabel,
 			m.chartViewStock,
 			m.chartViewStockName,
 			titleDateStr)))
 	b.WriteString("\n\n")
 
-	// === 动态交易时段说明 ===
-	timeMarkers := ""
-	if m.chartData != nil {
-		timeMarkers = m.getMarketTradingSessionText(m.chartData.Market)
-	} else {
-		timeMarkers = m.getText("tradingSession")
+	// === 动态交易时段说明（仅分时模式显示） ===
+	if m.chartPeriod == "" {
+		timeMarkers := ""
+		if m.chartData != nil {
+			timeMarkers = m.getMarketTradingSessionText(m.chartData.Market)
+		} else {
+			timeMarkers = m.getText("tradingSession")
+		}
+		b.WriteString(lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Render(timeMarkers))
+		b.WriteString("\n\n")
 	}
-	b.WriteString(lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
-		Render(timeMarkers))
-	b.WriteString("\n\n")
 
 	// 处理不同状态
 	if m.chartIsCollecting {
@@ -1003,7 +1057,7 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 		b.WriteString("\n\n")
 		b.WriteString(lipgloss.NewStyle().
 			Faint(true).
-			Render(fmt.Sprintf("[%s] %s", "ESC/Q", m.getText("back"))))
+			Render(fmt.Sprintf("[%s] %s", "ESC", m.getText("back"))))
 		return b.String()
 	}
 
@@ -1017,7 +1071,7 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 		b.WriteString("\n\n")
 		b.WriteString(lipgloss.NewStyle().
 			Faint(true).
-			Render(fmt.Sprintf("[%s] %s", "ESC/Q", m.getText("back"))))
+			Render(fmt.Sprintf("[%s] %s", "ESC", m.getText("back"))))
 		return b.String()
 	}
 
@@ -1026,7 +1080,7 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 		b.WriteString("\n\n")
 		b.WriteString(lipgloss.NewStyle().
 			Faint(true).
-			Render(fmt.Sprintf("[%s] %s", "ESC/Q", m.getText("back"))))
+			Render(fmt.Sprintf("[%s] %s", "ESC", m.getText("back"))))
 		return b.String()
 	}
 
@@ -1039,7 +1093,7 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 		b.WriteString("\n\n")
 		b.WriteString(lipgloss.NewStyle().
 			Faint(true).
-			Render(fmt.Sprintf("[%s] %s", "ESC/Q", m.getText("back"))))
+			Render(fmt.Sprintf("[%s] %s", "ESC", m.getText("back"))))
 		return b.String()
 	}
 
@@ -1060,64 +1114,125 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 	}
 
 	closePrice := prices[len(prices)-1]
-	prevClose := m.chartData.PrevClose
 
-	// 降级方案：如果 prevClose 不可用，回退到开盘价（保持现有行为）
-	comparisonBase := prevClose
-	if comparisonBase == 0 {
-		comparisonBase = prices[0] // 降级到开盘价
-		logDebug("log.chart.statsFallback", m.chartData.Code)
+	var comparisonBase float64
+	if m.chartPeriod != "" {
+		// 聚合模式：用首个数据点作为比较基准
+		comparisonBase = prices[0]
+	} else {
+		// 分时模式：使用昨日收盘价
+		prevClose := m.chartData.PrevClose
+		comparisonBase = prevClose
+		if comparisonBase == 0 {
+			comparisonBase = prices[0]
+			logDebug("log.chart.statsFallback", m.chartData.Code)
+		}
 	}
 
 	change := closePrice - comparisonBase
-	changePercent := (change / comparisonBase) * 100
+	changePercent := 0.0
+	if comparisonBase != 0 {
+		changePercent = (change / comparisonBase) * 100
+	}
 
 	// 统计信息行：A股红涨绿跌，非A股绿涨红跌
 	isAShare := strings.HasPrefix(m.chartData.Code, "SH") || strings.HasPrefix(m.chartData.Code, "SZ")
 	statsStyle := lipgloss.NewStyle()
 	if change > 0 {
-		// 上涨：A股红色，非A股绿色
 		if isAShare {
-			statsStyle = statsStyle.Foreground(lipgloss.Color("9")) // 红色
+			statsStyle = statsStyle.Foreground(lipgloss.Color("9"))
 		} else {
-			statsStyle = statsStyle.Foreground(lipgloss.Color("10")) // 绿色
+			statsStyle = statsStyle.Foreground(lipgloss.Color("10"))
 		}
 	} else if change < 0 {
-		// 下跌：A股绿色，非A股红色
 		if isAShare {
-			statsStyle = statsStyle.Foreground(lipgloss.Color("10")) // 绿色
+			statsStyle = statsStyle.Foreground(lipgloss.Color("10"))
 		} else {
-			statsStyle = statsStyle.Foreground(lipgloss.Color("9")) // 红色
+			statsStyle = statsStyle.Foreground(lipgloss.Color("9"))
 		}
 	}
 
-	b.WriteString(statsStyle.Render(fmt.Sprintf(
-		"%s: %.2f  %s: %.2f  %s: %.2f  %s: %.2f  %s: %.2f  %s: %+.2f (%.2f%%)",
-		m.getText("prevClose"), prevClose,
-		m.getText("open"), prices[0],
-		m.getText("close"), closePrice,
-		m.getText("high"), maxPrice,
-		m.getText("low"), minPrice,
-		m.getText("change"), change, changePercent,
-	)))
+	if m.chartPeriod != "" {
+		// 聚合模式统计行：起始/最新/最高/最低/涨跌
+		b.WriteString(statsStyle.Render(fmt.Sprintf(
+			"%s: %.2f  %s: %.2f  %s: %.2f  %s: %.2f  %s: %+.2f (%.2f%%)",
+			m.getText("open"), prices[0],
+			m.getText("close"), closePrice,
+			m.getText("high"), maxPrice,
+			m.getText("low"), minPrice,
+			m.getText("change"), change, changePercent,
+		)))
+	} else {
+		// 分时模式统计行：昨收/开/收/高/低/涨跌
+		b.WriteString(statsStyle.Render(fmt.Sprintf(
+			"%s: %.2f  %s: %.2f  %s: %.2f  %s: %.2f  %s: %.2f  %s: %+.2f (%.2f%%)",
+			m.getText("prevClose"), m.chartData.PrevClose,
+			m.getText("open"), prices[0],
+			m.getText("close"), closePrice,
+			m.getText("high"), maxPrice,
+			m.getText("low"), minPrice,
+			m.getText("change"), change, changePercent,
+		)))
+	}
 	b.WriteString("\n\n")
 
 	// 渲染图表
 	b.WriteString(chartModel.View())
 	b.WriteString("\n\n")
 
-	// 底部操作提示
-	controls := fmt.Sprintf(
-		"[%s/%s] %s | [1/5/M/3/Y] %s | [%s/%s] %s",
-		"←", "→", m.getText("changeDate"),
-		"切换周期",
-		"ESC", "Q", m.getText("back"),
-	)
+	// 底部操作提示：周期快捷键 + 当前选中高亮
+	periodKeys := []struct {
+		key    string
+		period string
+		label  string
+	}{
+		{"T", "", m.getText("periodIntraday")},
+		{"D", "D", m.getText("periodDaily")},
+		{"W", "W", m.getText("periodWeekly")},
+		{"M", "M", m.getText("periodMonthly")},
+		{"Q", "Q", m.getText("periodQuarterly")},
+		{"Y", "Y", m.getText("periodYearly")},
+	}
+
+	var periodParts []string
+	for _, pk := range periodKeys {
+		label := fmt.Sprintf("[%s]%s", pk.key, pk.label)
+		if pk.period == m.chartPeriod {
+			// 当前选中周期高亮
+			label = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14")).Render(label)
+		}
+		periodParts = append(periodParts, label)
+	}
+
+	controls := strings.Join(periodParts, " ")
+	if m.chartPeriod == "" {
+		controls += fmt.Sprintf(" | [%s/%s] %s", "←", "→", m.getText("changeDate"))
+	}
+	controls += fmt.Sprintf(" | [%s] %s", "ESC", m.getText("back"))
+
 	b.WriteString(lipgloss.NewStyle().
 		Faint(true).
 		Render(controls))
 
 	return b.String()
+}
+
+// getChartPeriodName 返回当前图表周期的显示名称
+func (m *Model) getChartPeriodName() string {
+	switch m.chartPeriod {
+	case "D":
+		return m.getText("periodDaily")
+	case "W":
+		return m.getText("periodWeekly")
+	case "M":
+		return m.getText("periodMonthly")
+	case "Q":
+		return m.getText("periodQuarterly")
+	case "Y":
+		return m.getText("periodYearly")
+	default:
+		return m.getText("periodIntraday")
+	}
 }
 
 // ============================================================================
