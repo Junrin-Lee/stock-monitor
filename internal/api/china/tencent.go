@@ -57,7 +57,7 @@ func SearchStockByTencentAPI(keyword string) *types.StockData {
 	content, err := gbkToUtf8(body)
 	if err != nil {
 		log.Error("log.api.tencentSearchEncodeFail", err)
-		content = string(body)
+		return nil
 	}
 	log.Debug("log.api.tencentSearchResponse", content[:common.Min(300, len(content))])
 
@@ -102,7 +102,7 @@ func TryTencentAPI(symbol string) *types.StockData {
 	content, err := gbkToUtf8(body)
 	if err != nil {
 		log.Error("log.api.tencentEncodeFail", err)
-		content = string(body)
+		return &types.StockData{Symbol: symbol, Price: 0}
 	}
 	log.Debug("log.api.tencentResponse", content[:common.Min(100, len(content))])
 
