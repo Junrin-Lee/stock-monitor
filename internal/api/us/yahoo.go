@@ -5,14 +5,31 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"stock-monitor/internal/api/common"
 	"stock-monitor/internal/log"
 	"stock-monitor/internal/types"
 	"strings"
+	"sync"
 	"time"
+)
+
+// Yahoo Finance 429 rate limit backoff state
+var (
+	yahooRateLimitUntil time.Time
+	yahooRateLimitMu    sync.Mutex
 )
 
 // TryYahooFinanceAPI 使用Yahoo Finance API作为备用方案
 func TryYahooFinanceAPI(symbol string) *types.StockData {
+	// 429 退避检查：上次被限流后 60 秒内跳过请求
+	yahooRateLimitMu.Lock()
+	if time.Now().Before(yahooRateLimitUntil) {
+		yahooRateLimitMu.Unlock()
+		log.Debug("log.api.yahooBackoff")
+		return &types.StockData{Symbol: symbol, Price: 0}
+	}
+	yahooRateLimitMu.Unlock()
+
 	convertedSymbol := strings.ToUpper(strings.TrimSpace(symbol))
 	log.Debug("log.api.yahooSearch", convertedSymbol)
 
@@ -41,6 +58,9 @@ func TryYahooFinanceAPI(symbol string) *types.StockData {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 429 {
+		yahooRateLimitMu.Lock()
+		yahooRateLimitUntil = time.Now().Add(60 * time.Second)
+		yahooRateLimitMu.Unlock()
 		log.Debug("log.api.yahooRateLimit")
 		return &types.StockData{Symbol: symbol, Price: 0}
 	}
@@ -51,7 +71,7 @@ func TryYahooFinanceAPI(symbol string) *types.StockData {
 		return &types.StockData{Symbol: symbol, Price: 0}
 	}
 
-	log.Debug("log.api.yahooResponse", string(body))
+	log.Debug("log.api.yahooResponse", string(body[:common.Min(500, len(body))]))
 
 	var yahooResp struct {
 		Chart struct {
