@@ -11,8 +11,15 @@ import (
 	"stock-monitor/internal/api"
 )
 
-// validateStockCode checks that a stock code does not contain path traversal sequences.
+// validateStockCode checks that a stock code does not contain path traversal sequences,
+// null bytes, or other unsafe characters.
 func validateStockCode(code string) error {
+	if len(code) == 0 || len(code) > 20 {
+		return fmt.Errorf("invalid stock code length: %q", code)
+	}
+	if strings.IndexByte(code, 0) >= 0 {
+		return fmt.Errorf("invalid stock code (null byte): %q", code)
+	}
 	if strings.Contains(code, "..") || strings.Contains(code, "/") || strings.Contains(code, "\\") || strings.Contains(code, string(os.PathSeparator)) {
 		return fmt.Errorf("invalid stock code: %q", code)
 	}
@@ -27,6 +34,11 @@ func SaveIntradayData(filePath string, data *IntradayData) error {
 	lock := getFileLock(filePath)
 	lock.Lock()
 	defer lock.Unlock()
+	// Note: we intentionally do NOT delete the sync.Map entry after use.
+	// Deleting introduces a TOCTOU race: a goroutine waiting on the old mutex
+	// would enter the critical section while a new goroutine gets a fresh mutex
+	// via LoadOrStore, breaking mutual exclusion. The map growth is bounded by
+	// (num_stocks × trading_days) and is negligible in practice.
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
@@ -59,8 +71,14 @@ func SaveIntradayData(filePath string, data *IntradayData) error {
 
 // getFileLock returns a mutex for the given file path
 func getFileLock(filePath string) *sync.Mutex {
-	lock, _ := intradayFileLocks.LoadOrStore(filePath, &sync.Mutex{})
-	return lock.(*sync.Mutex)
+	val, _ := intradayFileLocks.LoadOrStore(filePath, &sync.Mutex{})
+	lock, ok := val.(*sync.Mutex)
+	if !ok {
+		// This should never happen — LoadOrStore always stores *sync.Mutex.
+		// Panic instead of silently creating a second mutex (which would break mutual exclusion).
+		panic(fmt.Sprintf("intradayFileLocks: unexpected type %T for key %q", val, filePath))
+	}
+	return lock
 }
 
 // ensureIntradayDirectory creates the directory structure for a stock if needed
