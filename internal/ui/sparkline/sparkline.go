@@ -45,7 +45,7 @@ func Generate(prices []float64, width int, upColor, downColor, flatColor string)
 	for i, p := range sampled {
 		var idx int
 		if maxVal == minVal {
-			idx = 3 // 价格完全不变，显示中间高度
+			idx = len(blocks) - 1 // 价格完全不变，显示满格（平盘）
 		} else {
 			// 归一化到 0-7
 			normalized := (p - minVal) / (maxVal - minVal)
