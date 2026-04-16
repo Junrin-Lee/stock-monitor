@@ -17,6 +17,7 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 
 	// 清理函数
 	defer func() {
+		im.wg.Done()
 		im.mu.Lock()
 		delete(im.activeStocks, stockCode)
 		im.mu.Unlock()
@@ -163,10 +164,12 @@ func (im *IntradayManager) startSmartWorker(stockCode, stockName, targetDate str
 				im.fetchInFlight.Delete(stockCode)
 				return
 			}
+			im.wg.Add(1)
 			go func() {
 				defer func() {
 					<-im.workerPool
 					im.fetchInFlight.Delete(stockCode)
+					im.wg.Done()
 				}()
 				decision, err := im.fetchAndSaveIntradayData(stockCode, stockName, im.model, checkHours, targetDate)
 

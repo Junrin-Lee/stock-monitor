@@ -23,6 +23,8 @@ func (m *Model) handleMainMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter", " ":
 		return m.executeMenuItem()
 	case "q", "ctrl+c":
+		m.stopIntradayDataCollection()
+		m.stopSearchIntradayWorker()
 		m.savePortfolio()
 		m.saveWatchlist()
 		m.saveAlertData()
@@ -120,6 +122,8 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 
 	case "exit": // 退出
 		logInfo("log.action.exit")
+		m.stopIntradayDataCollection()
+		m.stopSearchIntradayWorker()
 		m.savePortfolio()
 		m.saveWatchlist()
 		m.saveAlertData()

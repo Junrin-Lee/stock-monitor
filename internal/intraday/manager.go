@@ -13,6 +13,8 @@ type IntradayManager struct {
 	activeStocks   map[string]bool                   // Currently tracking stocks
 	workerPool     chan struct{}                     // Semaphore for max 10 concurrent workers
 	CancelChan     chan struct{}                     // Channel to stop all workers (exported for intraday_chart.go)
+	wg             sync.WaitGroup                    // Tracks active goroutines for graceful shutdown
+	stopOnce       sync.Once                         // Ensures CancelChan is closed exactly once
 	mu             sync.RWMutex                      // Protects activeStocks
 	fetchInFlight  sync.Map                          // Per-stock in-flight fetch guard (prevents concurrent fetch for same stock)
 	fetchInterval  time.Duration                     // 1 minute
@@ -91,6 +93,7 @@ func (im *IntradayManager) StartCollection(stockCode, stockName string) error {
 	logInfoDirect("[Intraday] Starting %s collection for %s (target: %s)",
 		mode.String(), stockCode, targetDate)
 
+	im.wg.Add(1)
 	go im.startSmartWorker(stockCode, stockName, targetDate, mode)
 
 	return nil
@@ -107,9 +110,11 @@ func (im *IntradayManager) startWorker(stockCode, stockName string, m ModelInter
 	im.activeStocks[stockCode] = true
 	im.mu.Unlock()
 
+	im.wg.Add(1)
 	go func() {
 		// Cleanup function
 		defer func() {
+			im.wg.Done()
 			im.mu.Lock()
 			delete(im.activeStocks, stockCode)
 			im.mu.Unlock()
@@ -148,11 +153,13 @@ func (im *IntradayManager) startWorker(stockCode, stockName string, m ModelInter
 					return
 				}
 
-				// Fetch with timeout
+				// Fetch with timeout — tracked by wg so Stop() waits for completion
+				im.wg.Add(1)
 				go func() {
 					defer func() {
 						<-im.workerPool // Release slot
 						im.fetchInFlight.Delete(stockCode)
+						im.wg.Done()
 					}()
 					// 使用空字符串作为 targetDate，让函数自动根据交易状态计算日期
 					im.fetchAndSaveIntradayData(stockCode, stockName, m, true, "")
@@ -163,6 +170,29 @@ func (im *IntradayManager) startWorker(stockCode, stockName string, m ModelInter
 			}
 		}
 	}()
+}
+
+// Stop gracefully shuts down all workers and waits up to 3 seconds for them
+// to finish. This timeout prevents blocking the Bubble Tea UI event loop when
+// workers are mid-flight on network I/O (HTTP timeouts can exceed 10s).
+// Workers that don't finish in time will exit on their own once their HTTP
+// requests complete — data integrity is maintained by atomic file writes.
+// Safe to call multiple times — uses sync.Once to prevent double-close panic.
+func (im *IntradayManager) Stop() {
+	im.stopOnce.Do(func() {
+		close(im.CancelChan)
+	})
+	done := make(chan struct{})
+	go func() {
+		im.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// All workers exited cleanly
+	case <-time.After(3 * time.Second):
+		// Timeout — remaining workers will exit on their own after HTTP timeouts
+	}
 }
 
 // logInfoDirect is a placeholder for direct logging (to be implemented by caller)

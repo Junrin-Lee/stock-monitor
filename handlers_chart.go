@@ -56,10 +56,10 @@ func (m *Model) startIntradayDataCollection() {
 	}
 }
 
-// stopIntradayDataCollection 停止采集分时数据
+// stopIntradayDataCollection 停止采集分时数据并等待所有 worker 退出
 func (m *Model) stopIntradayDataCollection() {
 	if m.intradayManager != nil {
-		close(m.intradayManager.CancelChan)
+		m.intradayManager.Stop()
 		m.intradayManager = nil
 		logDebug("log.intraday.trackStop")
 	}
@@ -1265,6 +1265,10 @@ func (m *Model) startSearchIntradayWorker(code, name, date string) tea.Cmd {
 	logDebug("log.search.workerStart", code, date)
 
 	// 启动临时 goroutine
+	// Concurrency contract: this goroutine mutates m.searchIntradayData under
+	// m.searchIntradayMu and signals m.searchIntradayUpdateCh. The View side
+	// reads under the same mutex. This deviates from Bubble Tea's pure message-passing
+	// model but is safe due to the dedicated mutex + channel notification pattern.
 	go m.runSearchIntradayWorker(code, name, date, prevClose)
 
 	// 启动监听更新的 cmd
