@@ -153,7 +153,10 @@ func TryTencentAPI(symbol string) *types.StockData {
 	}
 
 	change := price - previousClose
-	changePercent := (change / previousClose) * 100
+	changePercent := 0.0
+	if previousClose > 0 {
+		changePercent = (change / previousClose) * 100
+	}
 
 	log.Info("log.api.tencentSuccess", stockName, price, change, changePercent, openPrice, maxPrice, minPrice, turnoverRate, volume)
 
