@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"stock-monitor/internal/log"
 	"stock-monitor/internal/types"
+	"strings"
 )
 
 // NotificationParams contains parameters for alert notifications
@@ -84,11 +85,14 @@ func sendLinuxNotification(title, message string) {
 	}
 }
 
-// sendWindowsNotification sends Windows notification via PowerShell
+// sendWindowsNotification sends Windows notification via PowerShell.
+// Uses single-quoted strings to prevent variable expansion and subexpression injection (CWE-78).
 func sendWindowsNotification(title, message string) {
+	escapedMessage := strings.ReplaceAll(message, "'", "''")
+	escapedTitle := strings.ReplaceAll(title, "'", "''")
 	psScript := fmt.Sprintf(
-		`[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms"); [System.Windows.Forms.MessageBox]::Show("%s", "%s")`,
-		message, title,
+		`[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('%s', '%s')`,
+		escapedMessage, escapedTitle,
 	)
 	cmd := exec.Command("powershell", "-Command", psScript)
 	if err := cmd.Run(); err != nil {
