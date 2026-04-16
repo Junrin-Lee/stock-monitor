@@ -149,9 +149,4 @@ func (c *cacheEntryAdapter) GetPrevClose() float64 {
 // Re-export helper functions
 var (
 	GetTradingDayForCollection = intraday.GetTradingDayForCollection
-	IsDataComplete             = intraday.IsDataComplete
-	GetExpectedDatapoints      = intraday.GetExpectedDatapoints
-	GetTradingState            = intraday.GetTradingState
-	GetMarketLocation          = intraday.GetMarketLocation
-	IsMarketOpen               = intraday.IsMarketOpen
 )

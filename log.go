@@ -70,11 +70,6 @@ func InitLogger(logDir string, level LogLevel) error {
 // Logger 方法（向后兼容）
 // ============================================================================
 
-// Log 日志记录方法（向后兼容，但实际调用 internal/log）
-func (l *Logger) Log(level LogLevel, pathKey string, message string) {
-	// 不再使用，直接调用全局函数
-}
-
 // Sync 刷新日志缓冲区
 func (l *Logger) Sync() {
 	log.GlobalSync()
@@ -132,10 +127,3 @@ func logErrorDirect(format string, args ...any) {
 // 辅助函数
 // ============================================================================
 
-// getLogText 获取 i18n 日志文本（向后兼容）
-func getLogText(key string) string {
-	if m := globalModel.Load(); m != nil {
-		return m.getText(key)
-	}
-	return key
-}

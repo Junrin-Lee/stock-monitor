@@ -34,21 +34,6 @@ func canTriggerInCurrentPeriod(alert Alert) bool {
 	return internalAlert.CanTriggerInCurrentPeriod(typesAlert, timezone)
 }
 
-// isSameDay 判断两个时间是否是同一天
-func isSameDay(a, b *carbon.Carbon) bool {
-	return internalAlert.IsSameDay(a, b)
-}
-
-// isSameWeek 判断两个时间是否是同一周
-func isSameWeek(a, b *carbon.Carbon) bool {
-	return internalAlert.IsSameWeek(a, b)
-}
-
-// isSameMonth 判断两个时间是否是同一月
-func isSameMonth(a, b *carbon.Carbon) bool {
-	return internalAlert.IsSameMonth(a, b)
-}
-
 // getNextTriggerTime 获取下次可触发的时间
 func getNextTriggerTime(alert Alert) time.Time {
 	// 转换为 types.Alert

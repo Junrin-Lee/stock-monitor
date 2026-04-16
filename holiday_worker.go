@@ -53,14 +53,3 @@ func StartHolidayWorker() {
 	worker.Start()
 }
 
-// 以下是公开的工具函数，直接调用 internal/market 包
-
-// IsHoliday 检查指定日期是否为节假日
-func IsHoliday(date string, year int) bool {
-	return market.IsHoliday(date, year)
-}
-
-// IsCompDay 检查指定日期是否为补班日
-func IsCompDay(date string, year int) bool {
-	return market.IsCompDay(date, year)
-}

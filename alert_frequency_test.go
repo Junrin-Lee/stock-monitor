@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	internalAlert "stock-monitor/internal/alert"
 	"github.com/dromara/carbon/v2"
 )
 
@@ -340,7 +341,7 @@ func TestIsSameDay(t *testing.T) {
 			from1 := carbon.CreateFromStdTime(tc.time1)
 			from2 := carbon.CreateFromStdTime(tc.time2)
 
-			result := isSameDay(from1, from2)
+			result := internalAlert.IsSameDay(from1, from2)
 			if result != tc.expected {
 				t.Errorf("期望 %v, 得到 %v", tc.expected, result)
 			}
@@ -377,7 +378,7 @@ func TestIsSameWeek(t *testing.T) {
 			from1 := carbon.CreateFromStdTime(tc.time1)
 			from2 := carbon.CreateFromStdTime(tc.time2)
 
-			result := isSameWeek(from1, from2)
+			result := internalAlert.IsSameWeek(from1, from2)
 			if result != tc.expected {
 				t.Errorf("期望 %v, 得到 %v", tc.expected, result)
 			}
@@ -414,7 +415,7 @@ func TestIsSameMonth(t *testing.T) {
 			from1 := carbon.CreateFromStdTime(tc.time1)
 			from2 := carbon.CreateFromStdTime(tc.time2)
 
-			result := isSameMonth(from1, from2)
+			result := internalAlert.IsSameMonth(from1, from2)
 			if result != tc.expected {
 				t.Errorf("期望 %v, 得到 %v", tc.expected, result)
 			}

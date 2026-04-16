@@ -8,6 +8,7 @@ import (
 	"stock-monitor/internal/api"
 	"stock-monitor/internal/consts"
 	"stock-monitor/internal/intraday"
+	marketpkg "stock-monitor/internal/market"
 	"stock-monitor/internal/types"
 	"strconv"
 	"strings"
@@ -468,13 +469,13 @@ func (m *Model) createFixedTimeRange(date string, marketStr string) []TimePoint 
 
 	// 遍历所有交易时段
 	for _, session := range marketConfig.TradingSessions {
-		startTime, err := parseTimeInMarket(date, session.StartTime, marketConfig)
+		startTime, err := marketpkg.ParseTimeInMarket(date, session.StartTime, marketConfig)
 		if err != nil {
 			logDebug("log.chart.parseStartFail", session.StartTime, err)
 			continue
 		}
 
-		endTime, err := parseTimeInMarket(date, session.EndTime, marketConfig)
+		endTime, err := marketpkg.ParseTimeInMarket(date, session.EndTime, marketConfig)
 		if err != nil {
 			logDebug("log.chart.parseEndFail", session.EndTime, err)
 			continue
