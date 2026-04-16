@@ -65,6 +65,12 @@ func TryYahooFinanceAPI(symbol string) *types.StockData {
 		return &types.StockData{Symbol: symbol, Price: 0}
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		io.Copy(io.Discard, resp.Body) // drain body to allow connection reuse
+		log.Error("log.api.yahooStatusFail", resp.StatusCode)
+		return &types.StockData{Symbol: symbol, Price: 0}
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error("log.api.yahooReadFail", err)

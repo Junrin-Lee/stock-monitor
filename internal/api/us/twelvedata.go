@@ -28,6 +28,12 @@ func SearchStockByTwelveDataAPI(keyword string) *types.StockData {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		io.Copy(io.Discard, resp.Body) // drain body to allow connection reuse
+		log.Error("log.api.twelveDataSearchStatusFail", resp.StatusCode)
+		return nil
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error("log.api.twelveDataSearchReadFail", err)
@@ -93,6 +99,12 @@ func TryTwelveDataAPI(symbol string) *types.StockData {
 		return &types.StockData{Symbol: symbol, Price: 0}
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		io.Copy(io.Discard, resp.Body) // drain body to allow connection reuse
+		log.Error("log.api.twelveDataStatusFail", resp.StatusCode)
+		return &types.StockData{Symbol: symbol, Price: 0}
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
