@@ -72,23 +72,12 @@ func (m *Model) startStockPriceUpdates() tea.Cmd {
 	logDebug("log.cache.startAsync", len(uniqueStockCodes))
 
 	// 逐个发起异步获取请求（跳过已在更新中的股票，防止请求堆积）
+	// 使用 atomic check-and-set 模式，在单次 Lock 内完成检查+标记，避免 TOCTOU 竞态
 	var cmds []tea.Cmd
 	for _, code := range uniqueStockCodes {
-		m.stockPriceMutex.Lock()
-		if entry, exists := m.stockPriceCache[code]; exists {
-			if entry.IsUpdating {
-				m.stockPriceMutex.Unlock()
-				continue // 已在更新中，跳过
-			}
-			entry.IsUpdating = true
-		} else {
-			m.stockPriceCache[code] = &StockPriceCacheEntry{
-				Data:       nil,
-				UpdateTime: time.Time{},
-				IsUpdating: true,
-			}
+		if !m.trySetStockUpdating(code) {
+			continue // 已在更新中，跳过
 		}
-		m.stockPriceMutex.Unlock()
 
 		// 为每个股票添加一个延迟，避免同时请求太多
 		delay := time.Duration(len(cmds)) * 100 * time.Millisecond
@@ -103,6 +92,51 @@ func (m *Model) startStockPriceUpdates() tea.Cmd {
 	}
 
 	return tea.Batch(cmds...)
+}
+
+// evictStaleStockPriceCache removes cache entries for stocks no longer in portfolio or watchlist,
+// preventing unbounded memory growth during long-running sessions.
+func (m *Model) evictStaleStockPriceCache() {
+	// Build set of active codes
+	activeCodes := make(map[string]bool)
+	for _, stock := range m.portfolio.Stocks {
+		activeCodes[stock.Code] = true
+	}
+	for _, stock := range m.watchlist.Stocks {
+		activeCodes[stock.Code] = true
+	}
+
+	m.stockPriceMutex.Lock()
+	defer m.stockPriceMutex.Unlock()
+
+	for code, entry := range m.stockPriceCache {
+		if !activeCodes[code] && !entry.IsUpdating && time.Since(entry.UpdateTime) >= 30*time.Second {
+			delete(m.stockPriceCache, code)
+		}
+	}
+}
+
+// trySetStockUpdating atomically checks and sets the IsUpdating flag for a stock.
+// Returns true if the caller should proceed with the fetch (flag was set),
+// false if another fetch is already in progress (caller should skip).
+// This prevents the TOCTOU race of separate check + set with unlock in between.
+func (m *Model) trySetStockUpdating(code string) bool {
+	m.stockPriceMutex.Lock()
+	defer m.stockPriceMutex.Unlock()
+
+	if entry, exists := m.stockPriceCache[code]; exists {
+		if entry.IsUpdating {
+			return false
+		}
+		entry.IsUpdating = true
+		return true
+	}
+	m.stockPriceCache[code] = &StockPriceCacheEntry{
+		Data:       nil,
+		UpdateTime: time.Time{},
+		IsUpdating: true,
+	}
+	return true
 }
 
 // fetchStockPriceTriggerMsg 触发股价获取的消息

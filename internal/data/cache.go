@@ -69,6 +69,30 @@ func (c *StockPriceCache) SetUpdating(symbol string) {
 	}
 }
 
+// TrySetUpdating atomically checks if the stock is already updating,
+// and if not, marks it as updating. Returns true if the flag was set
+// (caller should proceed with the fetch), false if already updating
+// (caller should skip). This prevents the TOCTOU race of separate
+// IsUpdating + SetUpdating calls.
+func (c *StockPriceCache) TrySetUpdating(symbol string) bool {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if entry, exists := c.cache[symbol]; exists {
+		if entry.IsUpdating {
+			return false
+		}
+		entry.IsUpdating = true
+		return true
+	}
+	c.cache[symbol] = &types.StockPriceCacheEntry{
+		Data:       nil,
+		UpdateTime: time.Time{},
+		IsUpdating: true,
+	}
+	return true
+}
+
 // IsUpdating 检查股票是否正在更新
 func (c *StockPriceCache) IsUpdating(symbol string) bool {
 	c.mutex.RLock()

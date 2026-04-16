@@ -241,6 +241,7 @@ type Model struct {
 	stockPriceCache      map[string]*StockPriceCacheEntry // 股价数据缓存
 	stockPriceMutex      sync.RWMutex                     // 股价数据读写锁
 	stockPriceUpdateTime time.Time                        // 上次更新股价数据的时间
+	tickCount            int                               // tick 计数器，用于周期性维护任务
 
 	// For sparkline cache - Sparkline 趋势图缓存
 	sparklineCache     map[string]string    // code -> sparkline 字符串

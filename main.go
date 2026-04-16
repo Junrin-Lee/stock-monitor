@@ -282,6 +282,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		if m.state == consts.Monitoring || m.state == consts.WatchlistViewing {
 			m.lastUpdate = time.Now()
+			m.tickCount++
+
+			// 每 60 次 tick（约 5 分钟）清理过期缓存，防止内存无限增长
+			if m.tickCount%60 == 0 {
+				m.evictStaleStockPriceCache()
+			}
 
 			// 启动异步数据更新
 			var cmds []tea.Cmd

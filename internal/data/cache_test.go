@@ -496,6 +496,49 @@ func TestConcurrency(t *testing.T) {
 		"并发操作后缓存大小应在合理范围: %d", size)
 }
 
+// TestTrySetUpdating 测试原子的check-and-set更新标记
+func TestTrySetUpdating(t *testing.T) {
+	cache := NewStockPriceCache(30 * time.Second)
+
+	// 场景1: 不存在的股票 - 应成功标记
+	assert.True(t, cache.TrySetUpdating("NEW"), "不存在的股票应成功标记")
+	assert.True(t, cache.IsUpdating("NEW"), "标记后应处于更新中状态")
+
+	// 场景2: 已标记为更新中的股票 - 应返回false
+	assert.False(t, cache.TrySetUpdating("NEW"), "已更新中的股票应返回false")
+
+	// 场景3: 存在但未更新中的股票 - 应成功标记
+	testData := testutil.NewTestStockData("EXIST", "已存在", 10.0)
+	cache.Set("EXIST", testData)
+	assert.True(t, cache.TrySetUpdating("EXIST"), "未更新中的股票应成功标记")
+	assert.True(t, cache.IsUpdating("EXIST"), "标记后应处于更新中状态")
+}
+
+// TestTrySetUpdatingConcurrent 测试TrySetUpdating在并发下只有一个goroutine成功
+func TestTrySetUpdatingConcurrent(t *testing.T) {
+	cache := NewStockPriceCache(30 * time.Second)
+	numGoroutines := 100
+	var successCount int64
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if cache.TrySetUpdating("RACE") {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+	assert.Equal(t, int64(1), successCount,
+		"并发TrySetUpdating应恰好有1个goroutine成功, 实际 %d 个", successCount)
+}
+
 // BenchmarkCacheSet 性能基准测试-Set操作
 func BenchmarkCacheSet(b *testing.B) {
 	cache := NewStockPriceCache(30 * time.Second)
