@@ -44,7 +44,9 @@ func (m *Model) handleWatchlistViewing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			// Adjust cursor position (based on filtered list)
 			newFilteredStocks := m.getFilteredWatchlist()
-			if m.watchlistCursor >= len(newFilteredStocks) && len(newFilteredStocks) > 0 {
+			if len(newFilteredStocks) == 0 {
+				m.watchlistCursor = 0
+			} else if m.watchlistCursor >= len(newFilteredStocks) {
 				m.watchlistCursor = len(newFilteredStocks) - 1
 			}
 
