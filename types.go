@@ -241,7 +241,7 @@ type Model struct {
 	stockPriceCache      map[string]*StockPriceCacheEntry // 股价数据缓存
 	stockPriceMutex      sync.RWMutex                     // 股价数据读写锁
 	stockPriceUpdateTime time.Time                        // 上次更新股价数据的时间
-	tickCount            int                               // tick 计数器，用于周期性维护任务
+	tickCount            int                              // tick 计数器，用于周期性维护任务
 
 	// For sparkline cache - Sparkline 趋势图缓存
 	sparklineCache     map[string]string    // code -> sparkline 字符串
@@ -267,7 +267,7 @@ type Model struct {
 	searchIntradayData     *IntradayData // 搜索模式的临时分时数据(仅内存)
 	searchIntradayWorker   chan struct{} // 临时 worker 停止信号
 	searchIntradayUpdateCh chan struct{} // 数据更新通知 channel
-	searchIntradayMu       sync.RWMutex // 保护 searchIntradayUpdateCh 和 searchIntradayData 的并发访问
+	searchIntradayMu       sync.RWMutex  // 保护 searchIntradayUpdateCh 和 searchIntradayData 的并发访问
 
 	// For alert management - 告警管理相关字段
 	alertData              AlertData        // 告警数据

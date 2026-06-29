@@ -111,12 +111,12 @@ func TestLoadWatchlist(t *testing.T) {
 	tmpDir := testutil.CreateTempDir(t)
 
 	tests := []struct {
-		name            string
-		fileContent     string
-		expectedCount   int
-		expectedMarket  types.MarketType
-		shouldHaveTags  bool
-		desc            string
+		name           string
+		fileContent    string
+		expectedCount  int
+		expectedMarket types.MarketType
+		shouldHaveTags bool
+		desc           string
 	}{
 		{
 			name: "新格式-完整数据",
@@ -493,12 +493,12 @@ func TestSaveConfig(t *testing.T) {
 // TestValidatePortfolioColumns 测试持股列验证
 func TestValidatePortfolioColumns(t *testing.T) {
 	tests := []struct {
-		name              string
-		configured        []string
-		shouldContain     []string
-		shouldNotContain  []string
-		minLength         int
-		desc              string
+		name             string
+		configured       []string
+		shouldContain    []string
+		shouldNotContain []string
+		minLength        int
+		desc             string
 	}{
 		{
 			name:          "全部有效列",
@@ -551,12 +551,12 @@ func TestValidatePortfolioColumns(t *testing.T) {
 // TestValidateWatchlistColumns 测试自选列验证
 func TestValidateWatchlistColumns(t *testing.T) {
 	tests := []struct {
-		name              string
-		configured        []string
-		shouldContain     []string
-		shouldNotContain  []string
-		minLength         int
-		desc              string
+		name             string
+		configured       []string
+		shouldContain    []string
+		shouldNotContain []string
+		minLength        int
+		desc             string
 	}{
 		{
 			name:          "全部有效列",

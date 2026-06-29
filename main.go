@@ -129,13 +129,13 @@ func main() {
 		language:           language,
 		maxLines:           config.Display.MaxLines, // 从配置读取每页显示行数
 		lastUpdate:         lastUpdate,
-		alertData:          alertData,          // 启动时加载告警数据
-		portfolioScrollPos: 0,               // 持股列表滚动位置
-		watchlistScrollPos: 0,               // 自选列表滚动位置
-		portfolioCursor:    0,               // 持股列表游标
-		watchlistCursor:    0,               // 自选列表游标
-		portfolioIsSorted:  false,           // 持股列表默认未排序状态
-		watchlistIsSorted:  false,           // 自选列表默认未排序状态
+		alertData:          alertData, // 启动时加载告警数据
+		portfolioScrollPos: 0,         // 持股列表滚动位置
+		watchlistScrollPos: 0,         // 自选列表滚动位置
+		portfolioCursor:    0,         // 持股列表游标
+		watchlistCursor:    0,         // 自选列表游标
+		portfolioIsSorted:  false,     // 持股列表默认未排序状态
+		watchlistIsSorted:  false,     // 自选列表默认未排序状态
 		// 股价缓存初始化
 		stockPriceCache:      make(map[string]*StockPriceCacheEntry),
 		stockPriceUpdateTime: time.Time{}, // 初始化为零时间

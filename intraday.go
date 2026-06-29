@@ -8,10 +8,10 @@ import (
 
 // Re-export types from internal/intraday for backward compatibility
 type (
-	IntradayDataPoint    = intraday.IntradayDataPoint
-	IntradayData         = intraday.IntradayData
-	DatapointDiffResult  = intraday.DatapointDiffResult
-	SaveDecision         = intraday.SaveDecision
+	IntradayDataPoint   = intraday.IntradayDataPoint
+	IntradayData        = intraday.IntradayData
+	DatapointDiffResult = intraday.DatapointDiffResult
+	SaveDecision        = intraday.SaveDecision
 )
 
 // Re-export constants

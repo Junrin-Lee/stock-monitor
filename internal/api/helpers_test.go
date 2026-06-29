@@ -190,9 +190,9 @@ func TestIsHKStock(t *testing.T) {
 // TestGetMarketType 测试市场类型识别功能
 func TestGetMarketType(t *testing.T) {
 	tests := []struct {
-		name       string
-		symbol     string
-		expected   types.MarketType
+		name        string
+		symbol      string
+		expected    types.MarketType
 		description string
 	}{
 		// A股测试
@@ -383,8 +383,8 @@ func TestGenerateSearchKeywords(t *testing.T) {
 			input: "工业富联股份",
 			shouldContain: []string{
 				"工业富联股份", // 原始
-				"工业富联",     // 去掉"股份"
-				"工业富",      // 前3个字
+				"工业富联",   // 去掉"股份"
+				"工业富",    // 前3个字
 			},
 			shouldHaveLength: -1, // 不检查具体长度
 			desc:             "去掉后缀并生成短关键词",
@@ -394,8 +394,8 @@ func TestGenerateSearchKeywords(t *testing.T) {
 			input: "中国平安集团",
 			shouldContain: []string{
 				"中国平安集团", // 原始
-				"中国平安",    // 去掉"集团"
-				"平安集团",    // 去掉"中国"前缀
+				"中国平安",   // 去掉"集团"
+				"平安集团",   // 去掉"中国"前缀
 			},
 			shouldHaveLength: -1, // 不检查具体长度
 			desc:             "去掉前缀和后缀",
@@ -405,7 +405,7 @@ func TestGenerateSearchKeywords(t *testing.T) {
 			input: "中国平安",
 			shouldContain: []string{
 				"中国平安", // 原始
-				"平安",    // 去掉"中国"
+				"平安",   // 去掉"中国"
 			},
 			shouldHaveLength: -1, // 不检查具体长度
 			desc:             "去掉常见前缀",
@@ -438,7 +438,7 @@ func TestGenerateSearchKeywords(t *testing.T) {
 			input: "深圳市腾讯计算机系统",
 			shouldContain: []string{
 				"深圳市腾讯计算机系统", // 原始
-				"深圳市",           // 前3个字
+				"深圳市",        // 前3个字
 			},
 			shouldHaveLength: -1, // 不检查具体长度
 			desc:             "长名称生成多个关键词",

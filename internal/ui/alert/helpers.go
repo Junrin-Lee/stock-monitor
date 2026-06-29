@@ -1,8 +1,8 @@
 package alert
 
 import (
-	"strings"
 	"stock-monitor/internal/types"
+	"strings"
 )
 
 // GetStockAlerts returns all alerts for a specific stock

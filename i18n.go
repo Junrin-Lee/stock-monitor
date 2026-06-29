@@ -1,11 +1,11 @@
 package main
 
 import (
-	"stock-monitor/internal/consts"
 	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
+	"stock-monitor/internal/consts"
 )
 
 //go:embed i18n/*.json

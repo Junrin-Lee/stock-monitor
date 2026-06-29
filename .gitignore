@@ -11,25 +11,32 @@ coverage.html
 # vendor/
 
 # IDE setttings
-.vscode
-.idea
+.vscode/
+.idea/
 
 # AI settings
-/.claude
-/.opencode
-/opencode.json
-/.mcp.json
+.claude/
+.opencode/
+opencode.json
+.mcp.json
+.agents/
+.codegraph/
+
+## node
+node_modules/
 
 # macOS system files
 .DS_Store
 
 # Application data and configuration files
-/data/
-/cmd/conf/config.yml
+data/
+cmd/conf/config.yml
 
-/.rebase-temp
+.rebase-temp/
 
 # GoReleaser
-/dist/
+dist/
 
 doc/plans
+
+.letta/

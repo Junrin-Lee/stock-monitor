@@ -2,24 +2,24 @@ package table
 
 import (
 	"github.com/jedib0t/go-pretty/v6/table"
-	"stock-monitor/internal/ui"
 	"stock-monitor/internal/consts"
+	"stock-monitor/internal/ui"
 )
 
 // Builder 表格构建器
 type Builder struct {
-	columns      []*ui.ColumnMetadata
-	rows         []table.Row
-	headerRow    table.Row
-	footerRow    table.Row
-	cursor       int
-	scrollStart  int
-	scrollEnd    int
-	isSorted     bool
-	sortField    consts.SortField
-	sortDir      consts.SortDirection
-	style        table.Style
-	hasStyle     bool // 标记是否设置了自定义样式
+	columns     []*ui.ColumnMetadata
+	rows        []table.Row
+	headerRow   table.Row
+	footerRow   table.Row
+	cursor      int
+	scrollStart int
+	scrollEnd   int
+	isSorted    bool
+	sortField   consts.SortField
+	sortDir     consts.SortDirection
+	style       table.Style
+	hasStyle    bool // 标记是否设置了自定义样式
 }
 
 // NewBuilder 创建表格构建器

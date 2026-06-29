@@ -147,12 +147,12 @@ func (m *mockModel) OnStockPriceUpdate(code string, price float64) {}
 // TestGetTradingDayForCollection_LunchBreak 测试午休时段返回 Live 模式
 func TestGetTradingDayForCollection_LunchBreak(t *testing.T) {
 	tests := []struct {
-		name       string
-		stockCode  string
-		hour       int
-		minute     int
-		wantMode   types.CollectionMode
-		wantToday  bool // 是否应返回今天日期
+		name      string
+		stockCode string
+		hour      int
+		minute    int
+		wantMode  types.CollectionMode
+		wantToday bool // 是否应返回今天日期
 	}{
 		{"A股午休 11:31", "600000", 11, 31, types.CollectionModeLive, true},
 		{"A股午休 12:00", "600000", 12, 0, types.CollectionModeLive, true},

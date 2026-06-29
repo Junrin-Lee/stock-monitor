@@ -75,19 +75,19 @@ func RenderTaggingView(params TaggingViewParams, formatTextWithCursor func(strin
 
 // GroupSelectViewParams 分组选择视图参数
 type GroupSelectViewParams struct {
-	Title              string
-	MarketTagsTitle    string
-	UserTagsTitle      string
-	AllMarketsText     string
-	AllTagsText        string
-	NoTagsText         string
-	HelpText           string
-	MarketTags         []string
-	UserTags           []string
-	Cursor             int
-	FilterStep         int // 0=选择市场, 1=选择标签
-	SelectedMarket     types.MarketType
-	GetMarketTagName   func(types.MarketType) string
+	Title            string
+	MarketTagsTitle  string
+	UserTagsTitle    string
+	AllMarketsText   string
+	AllTagsText      string
+	NoTagsText       string
+	HelpText         string
+	MarketTags       []string
+	UserTags         []string
+	Cursor           int
+	FilterStep       int // 0=选择市场, 1=选择标签
+	SelectedMarket   types.MarketType
+	GetMarketTagName func(types.MarketType) string
 }
 
 // RenderGroupSelectView 渲染分组选择视图（两阶段选择，单页显示，支持全部选项）

@@ -139,11 +139,11 @@ func RenderAlertManage(params AlertManageViewParams) string {
 // StockAlertViewParams contains parameters for stock alert view
 type StockAlertViewParams struct {
 	ViewParams
-	StockCode       string
-	StockName       string
-	Alerts          []types.Alert
-	AlertCursor     int
-	Message         string
+	StockCode   string
+	StockName   string
+	Alerts      []types.Alert
+	AlertCursor int
+	Message     string
 }
 
 // RenderStockAlertManage renders stock-specific alert interface
@@ -400,9 +400,9 @@ func RenderAlertAdd(params AlertAddViewParams) string {
 
 // BatchMethodSelectViewParams contains parameters for batch method selection view
 type BatchMethodSelectViewParams struct {
-	GetText   func(string) string
-	Cursor    int
-	Message   string
+	GetText func(string) string
+	Cursor  int
+	Message string
 }
 
 // RenderBatchMethodSelect renders the batch method selection interface
@@ -548,12 +548,12 @@ func RenderSelectBatchStocks(params SelectBatchStocksViewParams) string {
 
 // BatchStockListViewParams contains parameters for batch stock list view
 type BatchStockListViewParams struct {
-	GetText        func(string) string
-	Config         types.Config
-	Stocks         []ui.SelectableStock
-	Cursor         int
-	SelectionMap   map[string]bool
-	Message        string
+	GetText         func(string) string
+	Config          types.Config
+	Stocks          []ui.SelectableStock
+	Cursor          int
+	SelectionMap    map[string]bool
+	Message         string
 	IsFromWatchlist bool
 }
 

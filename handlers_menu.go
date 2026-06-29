@@ -107,7 +107,7 @@ func (m *Model) executeMenuItem() (tea.Model, tea.Cmd) {
 
 		// 启动定时刷新并获取初始板块数据
 		var cmds []tea.Cmd
-		cmds = append(cmds, m.tickCmd())                       // 启动定时刷新循环
+		cmds = append(cmds, m.tickCmd())                        // 启动定时刷新循环
 		cmds = append(cmds, m.fetchSectorListCmd(m.sectorType)) // 立即获取板块数据
 		return m, tea.Batch(cmds...)
 

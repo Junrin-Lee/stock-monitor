@@ -294,11 +294,11 @@ func TestIsMarketOpenForConfig(t *testing.T) {
 // TestGetMarketLocation 测试市场时区获取
 func TestGetMarketLocation(t *testing.T) {
 	tests := []struct {
-		name           string
-		marketType     types.MarketType
-		expectedTZ     string
-		wantErr        bool
-		desc           string
+		name       string
+		marketType types.MarketType
+		expectedTZ string
+		wantErr    bool
+		desc       string
 	}{
 		{
 			name:       "中国市场",
@@ -412,10 +412,10 @@ func TestGetMarketConfigForType(t *testing.T) {
 	config.Markets.HongKong.Timezone = "Asia/Hong_Kong"
 
 	tests := []struct {
-		name           string
-		marketType     types.MarketType
-		expectedTZ     string
-		desc           string
+		name       string
+		marketType types.MarketType
+		expectedTZ string
+		desc       string
 	}{
 		{
 			name:       "中国市场配置",

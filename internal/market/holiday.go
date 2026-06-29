@@ -31,11 +31,11 @@ type Logger interface {
 // DefaultLogger 默认日志记录器（空实现）
 type DefaultLogger struct{}
 
-func (l *DefaultLogger) Info(key string, args ...interface{})          {}
-func (l *DefaultLogger) Warn(key string, args ...interface{})          {}
-func (l *DefaultLogger) Error(key string, args ...interface{})         {}
-func (l *DefaultLogger) Debug(format string, args ...interface{})      {}
-func (l *DefaultLogger) WarnDirect(format string, args ...interface{}) {}
+func (l *DefaultLogger) Info(key string, args ...interface{})           {}
+func (l *DefaultLogger) Warn(key string, args ...interface{})           {}
+func (l *DefaultLogger) Error(key string, args ...interface{})          {}
+func (l *DefaultLogger) Debug(format string, args ...interface{})       {}
+func (l *DefaultLogger) WarnDirect(format string, args ...interface{})  {}
 func (l *DefaultLogger) ErrorDirect(format string, args ...interface{}) {}
 func (l *DefaultLogger) DebugDirect(format string, args ...interface{}) {}
 

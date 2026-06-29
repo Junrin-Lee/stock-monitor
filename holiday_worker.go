@@ -52,4 +52,3 @@ func StartHolidayWorker() {
 	// 启动工作器
 	worker.Start()
 }
-

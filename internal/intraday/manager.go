@@ -10,17 +10,17 @@ import (
 
 // IntradayManager manages background fetching of intraday data
 type IntradayManager struct {
-	activeStocks   map[string]bool                   // Currently tracking stocks
-	workerPool     chan struct{}                     // Semaphore for max 10 concurrent workers
-	CancelChan     chan struct{}                     // Channel to stop all workers (exported for intraday_chart.go)
-	wg             sync.WaitGroup                    // Tracks active goroutines for graceful shutdown
-	stopOnce       sync.Once                         // Ensures CancelChan is closed exactly once
-	mu             sync.RWMutex                      // Protects activeStocks
-	fetchInFlight  sync.Map                          // Per-stock in-flight fetch guard (prevents concurrent fetch for same stock)
-	fetchInterval  time.Duration                     // 1 minute
-	workerMetadata map[string]*types.WorkerMetadata  // Track each worker's state
-	metadataMutex  sync.RWMutex                      // Protects workerMetadata
-	model          ModelInterface                    // Reference to main model
+	activeStocks   map[string]bool                  // Currently tracking stocks
+	workerPool     chan struct{}                    // Semaphore for max 10 concurrent workers
+	CancelChan     chan struct{}                    // Channel to stop all workers (exported for intraday_chart.go)
+	wg             sync.WaitGroup                   // Tracks active goroutines for graceful shutdown
+	stopOnce       sync.Once                        // Ensures CancelChan is closed exactly once
+	mu             sync.RWMutex                     // Protects activeStocks
+	fetchInFlight  sync.Map                         // Per-stock in-flight fetch guard (prevents concurrent fetch for same stock)
+	fetchInterval  time.Duration                    // 1 minute
+	workerMetadata map[string]*types.WorkerMetadata // Track each worker's state
+	metadataMutex  sync.RWMutex                     // Protects workerMetadata
+	model          ModelInterface                   // Reference to main model
 }
 
 // ModelInterface defines the interface for model access

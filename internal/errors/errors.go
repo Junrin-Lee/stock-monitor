@@ -9,12 +9,12 @@ import (
 type ErrorType string
 
 const (
-	ErrTypeAPI         ErrorType = "api"
-	ErrTypeData        ErrorType = "data"
-	ErrTypeValidation  ErrorType = "validation"
-	ErrTypeNotFound    ErrorType = "not_found"
-	ErrTypePermission  ErrorType = "permission"
-	ErrTypeTimeout     ErrorType = "timeout"
+	ErrTypeAPI        ErrorType = "api"
+	ErrTypeData       ErrorType = "data"
+	ErrTypeValidation ErrorType = "validation"
+	ErrTypeNotFound   ErrorType = "not_found"
+	ErrTypePermission ErrorType = "permission"
+	ErrTypeTimeout    ErrorType = "timeout"
 )
 
 // AppError 应用错误

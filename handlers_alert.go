@@ -1,15 +1,15 @@
 package main
 
 import (
-	"stock-monitor/internal/consts"
 	"fmt"
+	"stock-monitor/internal/consts"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
-	alertui "stock-monitor/internal/ui/alert"
-	"stock-monitor/internal/ui"
 	"stock-monitor/internal/types"
+	"stock-monitor/internal/ui"
+	alertui "stock-monitor/internal/ui/alert"
 )
 
 // ============================================================================
@@ -25,17 +25,17 @@ func convertCacheToTypes(cache map[string]*StockPriceCacheEntry) map[string]*typ
 		var data *types.StockData
 		if v.Data != nil {
 			data = &types.StockData{
-				Symbol:         v.Data.Symbol,
-				Name:           v.Data.Name,
-				Price:          v.Data.Price,
-				Change:         v.Data.Change,
-				ChangePercent:  v.Data.ChangePercent,
-				StartPrice:     v.Data.StartPrice,
-				MaxPrice:       v.Data.MaxPrice,
-				MinPrice:       v.Data.MinPrice,
-				PrevClose:      v.Data.PrevClose,
-				Volume:         v.Data.Volume,
-				TurnoverRate:   v.Data.TurnoverRate,
+				Symbol:        v.Data.Symbol,
+				Name:          v.Data.Name,
+				Price:         v.Data.Price,
+				Change:        v.Data.Change,
+				ChangePercent: v.Data.ChangePercent,
+				StartPrice:    v.Data.StartPrice,
+				MaxPrice:      v.Data.MaxPrice,
+				MinPrice:      v.Data.MinPrice,
+				PrevClose:     v.Data.PrevClose,
+				Volume:        v.Data.Volume,
+				TurnoverRate:  v.Data.TurnoverRate,
 			}
 		}
 		result[k] = &types.StockPriceCacheEntry{

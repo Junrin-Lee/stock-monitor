@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	internalAlert "stock-monitor/internal/alert"
 	"github.com/dromara/carbon/v2"
+	internalAlert "stock-monitor/internal/alert"
 )
 
 // TestCanTriggerInCurrentPeriod_NeverTriggered 测试从未触发过的告警
