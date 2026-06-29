@@ -114,11 +114,16 @@ func (m *Model) getSparklineForStock(code string) string {
 
 	prices := intraday.LoadLatestPrices(code)
 	if len(prices) < 3 {
-		return sparkline.Generate(nil, 12, "", "", "") // 返回占位符
+		return sparkline.Generate(nil, 12, 0, "", "", "") // 返回占位符
+	}
+
+	var prevClose float64
+	if entry := m.getStockPriceCacheEntry(code); entry != nil {
+		prevClose = entry.PrevClose
 	}
 
 	isAShare := strings.HasPrefix(code, "SH") || strings.HasPrefix(code, "SZ")
-	result := sparkline.GenerateWithDefaults(prices, isAShare)
+	result := sparkline.GenerateWithDefaults(prices, prevClose, isAShare)
 
 	if m.sparklineCache == nil {
 		m.sparklineCache = make(map[string]string)
