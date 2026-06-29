@@ -1,8 +1,8 @@
 package main
 
 import (
-	"stock-monitor/internal/consts"
 	"fmt"
+	"stock-monitor/internal/consts"
 	"stock-monitor/internal/ui"
 	"stock-monitor/internal/ui/watchlist"
 	"strings"
@@ -738,7 +738,7 @@ func (m *Model) handleWatchlistTagging(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tagInput, m.tagInputCursor = ui.DeleteRuneAtCursor(m.tagInput, m.tagInputCursor)
 		return m, nil
 	default:
-		str := msg.String()
+		str := string(msg.Runes)
 		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
 			m.tagInput, m.tagInputCursor = ui.InsertStringAtCursor(m.tagInput, m.tagInputCursor, str)
 		}
@@ -1164,8 +1164,8 @@ func (m *Model) handleWatchlistTagEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	default:
 		// Handle text input
-		if len(msg.String()) == 1 || (len(msg.String()) > 1 && msg.Type == tea.KeyRunes) {
-			m.tagEditInput, m.tagEditInputCursor = ui.InsertStringAtCursor(m.tagEditInput, m.tagEditInputCursor, msg.String())
+		if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 {
+			m.tagEditInput, m.tagEditInputCursor = ui.InsertStringAtCursor(m.tagEditInput, m.tagEditInputCursor, string(msg.Runes))
 		}
 		return m, nil
 	}
@@ -1297,16 +1297,16 @@ func (m *Model) viewWatchlistGroupSelect() string {
 	userTags := m.getUserTags()
 
 	params := watchlist.GroupSelectViewParams{
-		Title:            m.getText("watchlist.selectGroup"),
-		MarketTagsTitle:  m.getText("group.marketTags"),
-		UserTagsTitle:    m.getText("group.userTags"),
-		AllMarketsText:   m.getText("filter.allMarkets"),
-		AllTagsText:      m.getText("filter.allTags"),
-		MarketTags:       marketTags,
-		UserTags:         userTags,
-		Cursor:           m.cursor,
-		FilterStep:       m.filterSelectionStep,
-		HelpText:         m.getText("group.help"),
+		Title:           m.getText("watchlist.selectGroup"),
+		MarketTagsTitle: m.getText("group.marketTags"),
+		UserTagsTitle:   m.getText("group.userTags"),
+		AllMarketsText:  m.getText("filter.allMarkets"),
+		AllTagsText:     m.getText("filter.allTags"),
+		MarketTags:      marketTags,
+		UserTags:        userTags,
+		Cursor:          m.cursor,
+		FilterStep:      m.filterSelectionStep,
+		HelpText:        m.getText("group.help"),
 	}
 
 	return watchlist.RenderGroupSelectView(params)

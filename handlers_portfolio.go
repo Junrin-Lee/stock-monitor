@@ -1,11 +1,11 @@
 package main
 
 import (
-	"stock-monitor/internal/consts"
 	"fmt"
-	"strconv"
 	"stock-monitor/internal/api"
+	"stock-monitor/internal/consts"
 	"stock-monitor/internal/ui"
+	"strconv"
 	"strings"
 	"time"
 
@@ -357,7 +357,7 @@ func (m *Model) handleAddingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	default:
 		// Improved input handling: support multi-byte characters (e.g., consts.Chinese)
-		str := msg.String()
+		str := string(msg.Runes)
 		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
 			m.input, m.inputCursor = ui.InsertStringAtCursor(m.input, m.inputCursor, str)
 		}
@@ -552,7 +552,7 @@ func (m *Model) handleEditingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	default:
 		// Improved input handling: support multi-byte characters (e.g., consts.Chinese)
-		str := msg.String()
+		str := string(msg.Runes)
 		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
 			m.input, m.inputCursor = ui.InsertStringAtCursor(m.input, m.inputCursor, str)
 		}

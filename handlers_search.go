@@ -1,9 +1,9 @@
 package main
 
 import (
-	"stock-monitor/internal/consts"
 	"fmt"
 	"stock-monitor/internal/api"
+	"stock-monitor/internal/consts"
 	"stock-monitor/internal/ui"
 	"strings"
 	"time"
@@ -103,7 +103,7 @@ func (m *Model) handleSearchingStock(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput, m.searchInputCursor = ui.DeleteRuneAtCursor(m.searchInput, m.searchInputCursor)
 		return m, nil
 	default:
-		str := msg.String()
+		str := string(msg.Runes)
 		if len(str) > 0 && str != "\n" && str != "\r" && !ui.IsControlKey(str) {
 			m.searchInput, m.searchInputCursor = ui.InsertStringAtCursor(m.searchInput, m.searchInputCursor, str)
 		}
@@ -459,8 +459,8 @@ func (m *Model) viewSearchResultWithActions() string {
 
 		if viewSearchData != nil && len(viewSearchData.Datapoints) > 0 {
 			// Create chart (use smaller embedded size)
-			chartWidth := 100  // Embedded chart width
-			chartHeight := 15  // Embedded chart height
+			chartWidth := 100 // Embedded chart width
+			chartHeight := 15 // Embedded chart height
 
 			chartModel := m.createSearchIntradayChart(chartWidth, chartHeight)
 			if chartModel != nil {
@@ -671,8 +671,8 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 
 		if viewSearchData != nil && len(viewSearchData.Datapoints) > 0 {
 			// Create chart (use smaller embedded size)
-			chartWidth := 100  // Embedded chart width
-			chartHeight := 15  // Embedded chart height
+			chartWidth := 100 // Embedded chart width
+			chartHeight := 15 // Embedded chart height
 
 			chartModel := m.createSearchIntradayChart(chartWidth, chartHeight)
 			if chartModel != nil {

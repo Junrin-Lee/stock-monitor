@@ -130,7 +130,7 @@ func HandleTextInput(msg tea.KeyMsg, text *string, cursor *int) bool {
 		*text, *cursor = DeleteRuneAtCursor(*text, *cursor)
 		return true
 	default:
-		str := msg.String()
+		str := string(msg.Runes)
 		if len(str) > 0 && str != "\n" && str != "\r" && !IsControlKey(str) {
 			*text, *cursor = InsertStringAtCursor(*text, *cursor, str)
 			return true
