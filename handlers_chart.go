@@ -541,7 +541,8 @@ func indexLabelFormatter(labels []string) func(float64) string {
 //   - 第 2 条系列是价格线，后绘制因而覆盖在零轴之上；
 //   - ColorAbove/ColorBelow 以 base 为阈值，对“零轴之上/之下”的单元格分别着涨/跌色，
 //     着色边界天然对齐零轴；恰好落在零轴上的点保持中性色；
-//   - Y 轴范围以 base 为中心对称展开，使等幅的涨与跌占据等高，便于直观比较。
+//   - Y 轴自适应紧贴当日高低并始终含零轴，最大化可见振幅（不以零轴对称，
+//     以免开盘瞬时尖刺撑大范围、压扁主区间）。
 //
 // base 通常为昨收价；缺失时由调用方降级为开盘价。isAShare 决定红绿方向。
 // 返回多行字符串，可直接写入视图。
@@ -558,7 +559,7 @@ func renderIntradayASCII(prices []float64, timeLabels []string, base float64, is
 		refLine[i] = base
 	}
 
-	// Y 轴以零轴为中心对称：取价格到零轴的最大偏离，两侧等距展开
+	// Y 轴自适应：紧贴当日最高/最低，并始终把零轴(base)纳入范围
 	minP, maxP := prices[0], prices[0]
 	for _, p := range prices {
 		if p < minP {
@@ -568,18 +569,19 @@ func renderIntradayASCII(prices []float64, timeLabels []string, base float64, is
 			maxP = p
 		}
 	}
-	dev := math.Max(math.Abs(maxP-base), math.Abs(minP-base))
-	if dev <= 0 {
-		dev = base * 0.005 // 完全无波动时给 0.5% 视觉空间
+	lo := math.Min(minP, base)
+	hi := math.Max(maxP, base)
+	margin := (hi - lo) * 0.1
+	if margin <= 0 {
+		margin = base * 0.005 // 完全无波动时给 0.5% 视觉空间
 	}
-	margin := dev * 0.1
 
 	return asciigraph.PlotMany(
 		[][]float64{refLine, prices}, // 零轴在前、价格线在后（覆盖在上）
 		asciigraph.Width(width),
 		asciigraph.Height(height),
-		asciigraph.LowerBound(base-dev-margin),
-		asciigraph.UpperBound(base+dev+margin),
+		asciigraph.LowerBound(lo-margin),
+		asciigraph.UpperBound(hi+margin),
 		asciigraph.SeriesColors(asciigraph.DarkGray, asciigraph.White),
 		asciigraph.ColorAbove(upColor, base),
 		asciigraph.ColorBelow(downColor, base),
