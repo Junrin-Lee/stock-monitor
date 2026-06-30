@@ -166,8 +166,6 @@
   "log.chart.dataNil": "[Chart] chartData is nil",
   "log.chart.dataEmpty": "[Chart] chartData.Datapoints is empty",
   "log.chart.dataCount": "[Chart] chartData contains %d datapoints",
-  "log.chart.priceRange": "[Chart] Price range: %.3f-%.3f, volatility: %.2f%%, margin: %.3f",
-  "log.chart.dimensions": "[Chart] Creating chart - width:%d height:%d points:%d range:%.3f-%.3f",
   "log.chart.success": "[Chart] Chart created and drawn successfully",
   "log.chart.prevCloseFromCache": "[Chart] PrevClose from cache: %s = %.2f",
   "log.chart.prevCloseFromAPI": "[Chart] PrevClose from API: %s = %.2f",

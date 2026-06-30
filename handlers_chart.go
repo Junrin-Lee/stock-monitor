@@ -14,10 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NimbleMarkets/ntcharts/canvas"
-	"github.com/NimbleMarkets/ntcharts/linechart"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/guptarohit/asciigraph"
 )
 
 // ============================================================================
@@ -500,18 +499,141 @@ func (m *Model) createFixedTimeRange(date string, marketStr string) []TimePoint 
 // 图表创建
 // ============================================================================
 
-// createIntradayChart 从分时数据创建图表（使用普通 linechart 以精确控制数据点）
-func (m *Model) createIntradayChart(termWidth, termHeight int) *linechart.Model {
+// upDownColors 返回涨色/跌色：A股红涨绿跌；美股/港股绿涨红跌。
+// asciigraph 的 Red(9)/Lime(10) 与项目其余处使用的 lipgloss "9"/"10" 同色。
+func upDownColors(isAShare bool) (up, down asciigraph.AnsiColor) {
+	if isAShare {
+		return asciigraph.Red, asciigraph.Lime
+	}
+	return asciigraph.Lime, asciigraph.Red
+}
+
+// priceAxisFormatter 按价格量级动态选择 Y 轴标签精度。
+func priceAxisFormatter(v float64) string {
+	switch {
+	case v >= 100:
+		return fmt.Sprintf("%.1f", v) // 100+ → 150.5
+	case v >= 10:
+		return fmt.Sprintf("%.2f", v) // 10-100 → 35.25
+	case v >= 1:
+		return fmt.Sprintf("%.3f", v) // 1-10 → 5.745
+	default:
+		return fmt.Sprintf("%.4f", v) // <1 → 0.7452
+	}
+}
+
+// indexLabelFormatter 将 X 轴刻度值（数据点索引）映射回对应标签。
+// asciigraph 自行决定刻度位置并等距取点，这里只负责把索引翻译成文本。
+func indexLabelFormatter(labels []string) func(float64) string {
+	return func(v float64) string {
+		idx := int(v + 0.5)
+		if idx < 0 || idx >= len(labels) {
+			return ""
+		}
+		return labels[idx]
+	}
+}
+
+// renderIntradayASCII 使用 asciigraph 渲染分时图，带 prevClose 零轴参考线与涨跌双色。
+//
+// 设计要点：
+//   - 第 1 条系列是与价格等长的常量序列（值恒为 base），渲染为灰色水平“零轴”；
+//   - 第 2 条系列是价格线，后绘制因而覆盖在零轴之上；
+//   - ColorAbove/ColorBelow 以 base 为阈值，对“零轴之上/之下”的单元格分别着涨/跌色，
+//     着色边界天然对齐零轴；恰好落在零轴上的点保持中性色；
+//   - Y 轴范围以 base 为中心对称展开，使等幅的涨与跌占据等高，便于直观比较。
+//
+// base 通常为昨收价；缺失时由调用方降级为开盘价。isAShare 决定红绿方向。
+// 返回多行字符串，可直接写入视图。
+func renderIntradayASCII(prices []float64, timeLabels []string, base float64, isAShare bool, width, height int) string {
+	if len(prices) < 2 || base <= 0 || width < 1 || height < 1 {
+		return ""
+	}
+
+	upColor, downColor := upDownColors(isAShare)
+
+	// 零轴参考线：与价格序列等长的常量序列
+	refLine := make([]float64, len(prices))
+	for i := range refLine {
+		refLine[i] = base
+	}
+
+	// Y 轴以零轴为中心对称：取价格到零轴的最大偏离，两侧等距展开
+	minP, maxP := prices[0], prices[0]
+	for _, p := range prices {
+		if p < minP {
+			minP = p
+		}
+		if p > maxP {
+			maxP = p
+		}
+	}
+	dev := math.Max(math.Abs(maxP-base), math.Abs(minP-base))
+	if dev <= 0 {
+		dev = base * 0.005 // 完全无波动时给 0.5% 视觉空间
+	}
+	margin := dev * 0.1
+
+	return asciigraph.PlotMany(
+		[][]float64{refLine, prices}, // 零轴在前、价格线在后（覆盖在上）
+		asciigraph.Width(width),
+		asciigraph.Height(height),
+		asciigraph.LowerBound(base-dev-margin),
+		asciigraph.UpperBound(base+dev+margin),
+		asciigraph.SeriesColors(asciigraph.DarkGray, asciigraph.White),
+		asciigraph.ColorAbove(upColor, base),
+		asciigraph.ColorBelow(downColor, base),
+		asciigraph.XAxisRange(0, float64(len(prices)-1)),
+		asciigraph.XAxisValueFormatter(indexLabelFormatter(timeLabels)),
+		asciigraph.YAxisValueFormatter(priceAxisFormatter),
+	)
+}
+
+// renderAggregatedASCII 使用 asciigraph 渲染聚合 K 线（日/周/月）。
+//
+// 与分时图不同：聚合模式没有“昨收零轴”概念，整条线使用单色（按末值相对首值
+// 判断涨跌方向），Y 轴使用自适应留白（calculateAdaptiveMargin）而非以零轴对称。
+func renderAggregatedASCII(prices []float64, labels []string, isAShare bool, width, height int) string {
+	if len(prices) < 2 || width < 1 || height < 1 {
+		return ""
+	}
+
+	up, down := upDownColors(isAShare)
+	lineColor := asciigraph.White // 持平
+	if last := prices[len(prices)-1]; last > prices[0] {
+		lineColor = up
+	} else if last < prices[0] {
+		lineColor = down
+	}
+
+	minPrice, maxPrice, margin := calculateAdaptiveMargin(prices)
+
+	return asciigraph.Plot(prices,
+		asciigraph.Width(width),
+		asciigraph.Height(height),
+		asciigraph.LowerBound(minPrice-margin),
+		asciigraph.UpperBound(maxPrice+margin),
+		asciigraph.SeriesColors(lineColor),
+		asciigraph.XAxisRange(0, float64(len(prices)-1)),
+		asciigraph.XAxisValueFormatter(indexLabelFormatter(labels)),
+		asciigraph.YAxisValueFormatter(priceAxisFormatter),
+	)
+}
+
+// createIntradayChart 从分时数据创建图表，统一使用 asciigraph 渲染。
+// 分时模式带 prevClose 零轴与涨跌双色；聚合模式（日/周/月K）为单色线。
+// 返回渲染好的多行字符串；终端过小或无数据时返回 ""。
+func (m *Model) createIntradayChart(termWidth, termHeight int) string {
 	logDebug("log.chart.creating", termWidth, termHeight)
 
 	if m.chartData == nil {
 		logDebug("log.chart.dataNil")
-		return nil
+		return ""
 	}
 
 	if len(m.chartData.Datapoints) == 0 {
 		logDebug("log.chart.dataEmpty")
-		return nil
+		return ""
 	}
 
 	logDebug("log.chart.dataPoints", len(m.chartData.Datapoints))
@@ -521,7 +643,7 @@ func (m *Model) createIntradayChart(termWidth, termHeight int) *linechart.Model 
 	minHeight := 15
 
 	if termWidth < minWidth || termHeight < minHeight {
-		return nil
+		return ""
 	}
 
 	// 计算可用空间
@@ -579,166 +701,25 @@ func (m *Model) createIntradayChart(termWidth, termHeight int) *linechart.Model 
 
 	if len(dataPoints) == 0 {
 		logDebug("log.chart.dataEmpty")
-		return nil
+		return ""
 	}
 
-	// === 智能计算Y轴范围 ===
-	actualPrices := make([]float64, len(m.chartData.Datapoints))
-	for i, dp := range m.chartData.Datapoints {
-		actualPrices[i] = dp.Price
-	}
-
-	minPrice, maxPrice, margin := calculateAdaptiveMargin(actualPrices)
-
-	logDebug("log.chart.priceRange", minPrice, maxPrice, (maxPrice-minPrice)/minPrice*100, margin)
-
-	// 设置样式：A股红涨绿跌，非A股绿涨红跌
-	lastPrice := m.chartData.Datapoints[len(m.chartData.Datapoints)-1].Price
-
-	var comparisonBase float64
-	if isAggregated {
-		// 聚合模式：用首个数据点作为比较基准（无 PrevClose）
-		comparisonBase = m.chartData.Datapoints[0].Price
-	} else {
-		// 分时模式：使用昨日收盘价
-		prevClose := m.chartData.PrevClose
-		comparisonBase = prevClose
-		if comparisonBase == 0 {
-			comparisonBase = m.chartData.Datapoints[0].Price // 降级到开盘价
-			logDebug("log.chart.colorFallback", m.chartData.Code)
-		}
-	}
-
-	// 判断是否为A股（SH/SZ开头）
+	// === 渲染（分时 / 聚合两种模式）===
 	isAShare := strings.HasPrefix(m.chartData.Code, "SH") || strings.HasPrefix(m.chartData.Code, "SZ")
-
-	var chartStyle lipgloss.Style
-	if lastPrice > comparisonBase {
-		// 上涨：A股红色，非A股绿色
-		if isAShare {
-			chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // 红色
-		} else {
-			chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // 绿色
-		}
-	} else if lastPrice < comparisonBase {
-		// 下跌：A股绿色，非A股红色
-		if isAShare {
-			chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // 绿色
-		} else {
-			chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // 红色
-		}
-	} else {
-		chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15")) // 白色
-	}
-
-	// === 创建自定义 Y 轴标签格式化器 ===
-	// 根据价格量级动态选择精度
-	yLabelFormatter := func(index int, value float64) string {
-		if value >= 100 {
-			return fmt.Sprintf("%.1f", value) // 100+ → 150.5
-		} else if value >= 10 {
-			return fmt.Sprintf("%.2f", value) // 10-100 → 35.25
-		} else if value >= 1 {
-			return fmt.Sprintf("%.3f", value) // 1-10 → 5.745
-		} else {
-			return fmt.Sprintf("%.4f", value) // <1 → 0.7452
-		}
-	}
-
-	// === 创建自定义 X 轴标签格式化器 ===
-	var xLabelFormatter func(int, float64) string
+	logDebug("log.chart.success")
 
 	if isAggregated {
-		// 聚合模式（日K/周K/月K等）：每个数据点的 Time 已包含标签，等间隔显示
-		totalPoints := len(timeLabels)
-		step := totalPoints / 8
-		if step < 1 {
-			step = 1
-		}
-		xLabelFormatter = func(index int, value float64) string {
-			idx := int(math.Round(value))
-			if idx < 0 || idx >= totalPoints {
-				return ""
-			}
-			if idx%step == 0 || idx == totalPoints-1 {
-				return timeLabels[idx]
-			}
-			return ""
-		}
-	} else {
-		// 单日模式：只在关键时间点显示标签（开盘、午休、午盘、收盘）
-		// 使用时间容差匹配，因为刻度位置可能不恰好落在关键时间点
-		xLabelFormatter = func(index int, value float64) string {
-			idx := int(math.Round(value))
-			if idx < 0 || idx >= len(timeLabels) {
-				return ""
-			}
-
-			timeLabel := timeLabels[idx]
-
-			// 解析时间为分钟数
-			parts := strings.Split(timeLabel, ":")
-			if len(parts) != 2 {
-				return ""
-			}
-			hour, _ := strconv.Atoi(parts[0])
-			minute, _ := strconv.Atoi(parts[1])
-			totalMinutes := hour*60 + minute
-
-			// 关键时间点（以分钟表示）及容差
-			keyPoints := []struct {
-				minutes   int
-				label     string
-				tolerance int
-			}{
-				{540, "09:00", 8},  // 港股集合竞价开始
-				{555, "09:15", 8},  // A股集合竞价开始
-				{570, "09:30", 10}, // 09:30 ± 10分钟
-				{690, "11:30", 10}, // 11:30 ± 10分钟
-				{780, "13:00", 10}, // 13:00 ± 10分钟
-				{897, "14:57", 8},  // A股收盘竞价开始
-				{900, "15:00", 10}, // 15:00 ± 10分钟（与 14:57 不冲突）
-				{960, "16:00", 10}, // 港股/美股收盘
-			}
-
-			// 找到最接近的关键时间点
-			for _, kp := range keyPoints {
-				diff := totalMinutes - kp.minutes
-				if diff < 0 {
-					diff = -diff
-				}
-				if diff <= kp.tolerance {
-					return kp.label
-				}
-			}
-
-			return ""
-		}
+		// 聚合模式（日/周/月K）：单色线 + 自适应 Y 轴，无昨收零轴
+		return renderAggregatedASCII(dataPoints, timeLabels, isAShare, chartWidth, chartHeight)
 	}
 
-	// === 创建图表 ===
-	logDebug("log.chart.dimensions", chartWidth, chartHeight, len(dataPoints), minPrice-margin, maxPrice+margin)
-
-	lc := linechart.New(chartWidth, chartHeight,
-		0, float64(len(dataPoints)-1), // X 轴范围：0 到数据点数量-1
-		minPrice-margin, maxPrice+margin, // Y 轴范围
-		linechart.WithXYSteps(8, 5), // X轴8个刻度, Y轴5个刻度
-		linechart.WithXLabelFormatter(xLabelFormatter),
-		linechart.WithYLabelFormatter(yLabelFormatter), // Y轴标签格式化器
-		linechart.WithStyles(lipgloss.Style{}, lipgloss.Style{}, chartStyle),
-	)
-
-	// === 使用 Braille 字符绘制数据点 ===
-	for i := 0; i < len(dataPoints)-1; i++ {
-		p1 := canvas.Float64Point{X: float64(i), Y: dataPoints[i]}
-		p2 := canvas.Float64Point{X: float64(i + 1), Y: dataPoints[i+1]}
-		lc.DrawBrailleLineWithStyle(p1, p2, chartStyle)
+	// 分时模式：以昨收价为零轴（缺失时降级为开盘价），涨跌双色
+	base := m.chartData.PrevClose
+	if base == 0 {
+		base = m.chartData.Datapoints[0].Price
+		logDebug("log.chart.colorFallback", m.chartData.Code)
 	}
-
-	lc.DrawXYAxisAndLabel()
-
-	logDebug("log.chart.success")
-	return &lc
+	return renderIntradayASCII(dataPoints, timeLabels, base, isAShare, chartWidth, chartHeight)
 }
 
 // ============================================================================
@@ -1091,8 +1072,8 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 	}
 
 	// 创建图表
-	chartModel := m.createIntradayChart(termWidth, termHeight)
-	if chartModel == nil {
+	chartView := m.createIntradayChart(termWidth, termHeight)
+	if chartView == "" {
 		b.WriteString(m.getText("terminalTooSmall"))
 		b.WriteString("\n\n")
 		b.WriteString(m.getText("pleaseResize"))
@@ -1183,7 +1164,7 @@ func (m *Model) viewIntradayChart(termWidth, termHeight int) string {
 	b.WriteString("\n\n")
 
 	// 渲染图表
-	b.WriteString(chartModel.View())
+	b.WriteString(chartView)
 	b.WriteString("\n\n")
 
 	// 底部操作提示：周期快捷键 + 当前选中高亮
@@ -1402,7 +1383,8 @@ func (m *Model) stopSearchIntradayWorker() {
 // 1. 数据源: m.searchIntradayData (内存) vs m.chartData (磁盘/内存)
 // 2. 尺寸: 较小的嵌入式图表 vs 全屏图表
 // 3. 时间轴: 简化的时间标签 vs 完整时间标签
-func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.Model {
+// 返回渲染好的多行字符串；终端过小或无数据时返回 ""。
+func (m *Model) createSearchIntradayChart(termWidth, termHeight int) string {
 	logDebug("log.search.chartCreate", termWidth, termHeight)
 
 	// 快照：锁内捕获指针防止与 worker 写入竞态（结构体创建后不修改，指针捕获后安全）
@@ -1412,12 +1394,12 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 
 	if searchData == nil {
 		logDebug("log.search.chartDataNil")
-		return nil
+		return ""
 	}
 
 	if len(searchData.Datapoints) == 0 {
 		logDebug("log.search.chartDataEmpty")
-		return nil
+		return ""
 	}
 
 	logDebug("log.search.chartDataPoints", len(searchData.Datapoints))
@@ -1427,7 +1409,7 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 	minHeight := 8
 
 	if termWidth < minWidth || termHeight < minHeight {
-		return nil
+		return ""
 	}
 
 	// 计算可用空间（搜索模式使用更紧凑的布局）
@@ -1448,7 +1430,7 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 
 	if len(timeFramework) == 0 {
 		logDebug("log.search.chartNoTimeFramework")
-		return nil
+		return ""
 	}
 
 	// === 将实际数据填充到时间框架中 ===
@@ -1478,145 +1460,16 @@ func (m *Model) createSearchIntradayChart(termWidth, termHeight int) *linechart.
 		}
 	}
 
-	// === 智能计算Y轴范围 ===
-	actualPrices := make([]float64, len(searchData.Datapoints))
-	for i, dp := range searchData.Datapoints {
-		actualPrices[i] = dp.Price
-	}
-
-	minPrice, maxPrice, margin := calculateAdaptiveMargin(actualPrices)
-
-	logDebug("log.search.chartPriceRange", minPrice, maxPrice, margin)
-
-	// === 设置样式：A股红涨绿跌，非A股绿涨红跌 ===
-	lastPrice := searchData.Datapoints[len(searchData.Datapoints)-1].Price
-	prevClose := searchData.PrevClose
-
-	comparisonBase := prevClose
+	// === 比较基准：昨收价（缺失时降级为开盘价）===
+	comparisonBase := searchData.PrevClose
 	if comparisonBase == 0 {
 		comparisonBase = searchData.Datapoints[0].Price
 	}
-
 	isAShare := strings.HasPrefix(searchData.Code, "SH") ||
 		strings.HasPrefix(searchData.Code, "SZ")
 
-	var chartStyle lipgloss.Style
-	if lastPrice > comparisonBase {
-		if isAShare {
-			chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // 红色
-		} else {
-			chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // 绿色
-		}
-	} else if lastPrice < comparisonBase {
-		if isAShare {
-			chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // 绿色
-		} else {
-			chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // 红色
-		}
-	} else {
-		chartStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15")) // 白色
-	}
-
-	// === 创建简化的 Y 轴标签格式化器 ===
-	yLabelFormatter := func(index int, value float64) string {
-		if value >= 100 {
-			return fmt.Sprintf("%.1f", value)
-		} else if value >= 10 {
-			return fmt.Sprintf("%.2f", value)
-		} else {
-			return fmt.Sprintf("%.3f", value)
-		}
-	}
-
-	// === 创建简化的 X 轴标签格式化器（搜索模式只显示开盘和收盘）===
-	xLabelFormatter := func(index int, value float64) string {
-		idx := int(math.Round(value))
-		if idx < 0 || idx >= len(timeLabels) {
-			return ""
-		}
-
-		timeLabel := timeLabels[idx]
-		parts := strings.Split(timeLabel, ":")
-		if len(parts) != 2 {
-			return ""
-		}
-		hour, _ := strconv.Atoi(parts[0])
-		minute, _ := strconv.Atoi(parts[1])
-		totalMinutes := hour*60 + minute
-
-		// 根据市场类型显示不同的时间标签
-		switch searchData.Market {
-		case "china":
-			// A股：9:30 和 15:00
-			diff1 := totalMinutes - 570
-			if diff1 < 0 {
-				diff1 = -diff1
-			}
-			diff2 := totalMinutes - 900
-			if diff2 < 0 {
-				diff2 = -diff2
-			}
-			if diff1 <= 5 { // 9:30 ± 5分钟
-				return "09:30"
-			} else if diff2 <= 10 { // 15:00 ± 10分钟
-				return "15:00"
-			}
-		case "us":
-			// 美股：9:30 和 16:00
-			diff1 := totalMinutes - 570
-			if diff1 < 0 {
-				diff1 = -diff1
-			}
-			diff2 := totalMinutes - 960
-			if diff2 < 0 {
-				diff2 = -diff2
-			}
-			if diff1 <= 5 { // 9:30 ± 5分钟
-				return "09:30"
-			} else if diff2 <= 10 { // 16:00 ± 10分钟
-				return "16:00"
-			}
-		case "hongkong":
-			// 港股：9:30 和 16:00
-			diff1 := totalMinutes - 570
-			if diff1 < 0 {
-				diff1 = -diff1
-			}
-			diff2 := totalMinutes - 960
-			if diff2 < 0 {
-				diff2 = -diff2
-			}
-			if diff1 <= 5 { // 9:30 ± 5分钟
-				return "09:30"
-			} else if diff2 <= 10 { // 16:00 ± 10分钟
-				return "16:00"
-			}
-		}
-
-		return ""
-	}
-
-	// === 创建图表 ===
-	lc := linechart.New(chartWidth, chartHeight,
-		0, float64(len(dataPoints)-1),
-		minPrice-margin, maxPrice+margin,
-		linechart.WithXYSteps(4, 4), // 减少刻度数量
-		linechart.WithXLabelFormatter(xLabelFormatter),
-		linechart.WithYLabelFormatter(yLabelFormatter),
-		linechart.WithStyles(lipgloss.Style{}, lipgloss.Style{}, chartStyle),
-	)
-
-	// === 使用 Braille 字符绘制数据点 ===
-	for i := 0; i < len(dataPoints)-1; i++ {
-		p1 := canvas.Float64Point{X: float64(i), Y: dataPoints[i]}
-		p2 := canvas.Float64Point{X: float64(i + 1), Y: dataPoints[i+1]}
-		lc.DrawBrailleLineWithStyle(p1, p2, chartStyle)
-	}
-
-	lc.DrawXYAxisAndLabel()
-
 	logDebug("log.search.chartSuccess")
-	return &lc
+	return renderIntradayASCII(dataPoints, timeLabels, comparisonBase, isAShare, chartWidth, chartHeight)
 }
 
 // waitForSearchIntradayUpdate 监听搜索模式数据更新通知

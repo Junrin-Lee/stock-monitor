@@ -166,8 +166,6 @@
   "log.chart.dataNil": "[图表] chartData 为 nil",
   "log.chart.dataEmpty": "[图表] chartData.Datapoints 为空",
   "log.chart.dataCount": "[图表] chartData 包含 %d 个数据点",
-  "log.chart.priceRange": "[图表] 价格范围: %.3f-%.3f, 波动率: %.2f%%, margin: %.3f",
-  "log.chart.dimensions": "[图表] 创建图表 - 宽度:%d 高度:%d 数据点:%d 价格范围:%.3f-%.3f",
   "log.chart.success": "[图表] 图表创建并绘制成功",
   "log.chart.prevCloseFromCache": "[图表] 从缓存获取昨收: %s = %.2f",
   "log.chart.prevCloseFromAPI": "[图表] 从API获取昨收: %s = %.2f",

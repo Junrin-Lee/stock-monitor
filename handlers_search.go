@@ -462,9 +462,9 @@ func (m *Model) viewSearchResultWithActions() string {
 			chartWidth := 100 // Embedded chart width
 			chartHeight := 15 // Embedded chart height
 
-			chartModel := m.createSearchIntradayChart(chartWidth, chartHeight)
-			if chartModel != nil {
-				s += chartModel.View() + "\n"
+			chartView := m.createSearchIntradayChart(chartWidth, chartHeight)
+			if chartView != "" {
+				s += chartView + "\n"
 
 				// Display update info
 				if m.language == consts.Chinese {
@@ -674,9 +674,9 @@ func (m *Model) viewWatchlistSearchConfirm() string {
 			chartWidth := 100 // Embedded chart width
 			chartHeight := 15 // Embedded chart height
 
-			chartModel := m.createSearchIntradayChart(chartWidth, chartHeight)
-			if chartModel != nil {
-				s += chartModel.View() + "\n"
+			chartView := m.createSearchIntradayChart(chartWidth, chartHeight)
+			if chartView != "" {
+				s += chartView + "\n"
 
 				// Display update info
 				if m.language == consts.Chinese {
